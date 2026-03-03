@@ -76,10 +76,10 @@ export const superAdminNav: NavEntry[] = [
     { type: "link", label: "ACCOUNTANT PANEL", href: "/super/accountant", icon: LayoutDashboard, exact: true },
         {
         type: "group", label: "VOUCHERS", icon: FileText, items: [
-            { label: "Cash Vouchers", href: "/viewer/accountant/transactions", icon: Plus },
-            { label: "Cheque Vouchers", href: "/viewer/accountant/saved-receipts", icon: Receipt },
-            { label: "Cash Vouchers List", href: "/viewer/accountant/activity-log", icon: ScrollText },
-            { label: "Cheque Vouchers List", href: "/viewer/accountant/activity-log", icon: ScrollText },
+            { label: "Cash", href: "/super/accountant/vouchers/cash", icon: Plus },
+            { label: "Cheque", href: "/super/accountant/vouchers/cheque", icon: Receipt },
+            { label: "Cash List", href: "/super/accountant/vouchers/cash-list", icon: ScrollText },
+            { label: "Cheque List", href: "/super/accountant/vouchers/cheque-list", icon: ScrollText },
         ],
     },  
     {
@@ -209,13 +209,6 @@ export const viewerNav: NavEntry[] = [
     { type: "divider" },
     { type: "section", label: "Accountant" },
     { type: "link", label: "ACCOUNTANT DASHBOARD", href: "/viewer/accountant", icon: LayoutDashboard, exact: true },
-    {
-        type: "group", label: "VOUCHERS", icon: FileText, items: [
-            { label: "New Transaction", href: "/viewer/accountant/transactions", icon: Plus },
-            { label: "Transactions Receipt", href: "/viewer/accountant/saved-receipts", icon: Receipt },
-            { label: "Accountant Log", href: "/viewer/accountant/activity-log", icon: ScrollText },
-        ],
-    },  
     {
         type: "group", label: "TRANSACTIONS", icon: FileText, items: [
             { label: "New Transaction", href: "/viewer/accountant/transactions", icon: Plus },

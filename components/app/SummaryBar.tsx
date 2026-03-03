@@ -14,7 +14,7 @@ export function StatPill({
     children?: React.ReactNode;
 }) {
     return (
-        <div className="inline-flex items-center gap-2 rounded-lg border border-[#7a0f1f]/20 bg-[#7a0f1f]/5 px-3 py-2 text-[#7a0f1f] shadow-sm transition-colors hover:bg-[#7a0f1f]/10">
+        <div className="inline-flex items-center gap-2 rounded-md border border-[#7a0f1f]/20 bg-[#7a0f1f]/5 px-3 py-2 text-[#7a0f1f] shadow-sm transition-colors hover:bg-[#7a0f1f]/10">
             <Icon className="h-4 w-4 shrink-0" />
             {children ? (
                 <span>{children}</span>
