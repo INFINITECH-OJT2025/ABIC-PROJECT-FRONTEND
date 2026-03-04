@@ -78,7 +78,7 @@ export default function AccountantDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
                   { label: "New Transaction", href: "/accountant/transactions" },
-                  { label: "Transactions Receipt", href: "/accountant/saved-receipts" },
+                  { label: "Transaction Receipts", href: "/accountant/transaction-receipt" },
                   { label: "Mains Ledger", href: "/accountant/ledger/mains" },
                   { label: "Account Summary", href: "/accountant/account-summary" },
                 ].map((link, i) => (

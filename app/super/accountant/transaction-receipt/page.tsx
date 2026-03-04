@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import SummaryBar, { StatPill } from "@/components/app/SummaryBar";
-import { Receipt, ArrowDownCircle, ArrowUpCircle, FileText, Eye, Trash2 } from "lucide-react";
+import { Receipt, ArrowDownCircle, ArrowUpCircle, FileText, Eye, Trash2, Search, ChevronDown, User, X } from "lucide-react";
 import ConfirmationModal from "@/components/app/ConfirmationModal";
 import LoadingModal from "@/components/app/LoadingModal";
 import { useAppToast } from "@/components/app/toast/AppToastProvider";
@@ -45,6 +45,123 @@ const TRANSACTION_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: "WITHDRAWAL", label: "Withdrawal" },
 ];
 
+export type OwnerType = "COMPANY" | "CLIENT" | "MAIN" | "SYSTEM";
+export interface Owner {
+  id: number;
+  name: string;
+  owner_type: OwnerType;
+  status: string;
+}
+
+function OwnerTypeBadge({ type }: { type: OwnerType }) {
+  const map: Record<OwnerType, { bg: string; text: string; label: string }> = {
+    COMPANY: { bg: "bg-blue-100", text: "text-blue-700", label: "Company" },
+    CLIENT: { bg: "bg-purple-100", text: "text-purple-700", label: "Client" },
+    MAIN: { bg: "bg-amber-100", text: "text-amber-700", label: "Main" },
+    SYSTEM: { bg: "bg-gray-100", text: "text-gray-500", label: "System" },
+  };
+  const s = map[type] ?? { bg: "bg-gray-100", text: "text-gray-600", label: type };
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${s.bg} ${s.text}`}>
+      {s.label}
+    </span>
+  );
+}
+
+interface OwnerDropdownProps {
+  label?: string;
+  placeholder: string;
+  owners: Owner[];
+  loading: boolean;
+  selectedOwner: Owner | null;
+  onSelect: (owner: Owner | null) => void;
+}
+
+function OwnerDropdown({ label, placeholder, owners, loading, selectedOwner, onSelect }: OwnerDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  const filtered = owners.filter((o) => o.name.toLowerCase().includes(query.toLowerCase()));
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative flex flex-col gap-2 w-72 shrink-0">
+      {label && <label className="text-sm font-semibold text-gray-700 mt-1.5">{label}</label>}
+      <div
+        className={`flex items-center h-10 rounded-lg border bg-white cursor-pointer transition-all border-gray-300 hover:border-gray-400 ${open ? `border-[${ACCENT}] ring-2 ring-[${ACCENT}]/20` : ""}`}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <div className="pl-3 text-gray-400 flex-shrink-0">
+          <User className="w-4 h-4" />
+        </div>
+        <div className="flex-1 px-3 text-sm truncate">
+          {selectedOwner ? (
+            <span className="font-semibold text-gray-900 uppercase">{selectedOwner.name}</span>
+          ) : (
+            <span className="text-gray-400">{placeholder}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1 pr-3">
+          {selectedOwner && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onSelect(null); setQuery(""); }}
+              className="text-gray-400 hover:text-red-500 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        </div>
+      </div>
+
+      {open && (
+        <div className="absolute top-full mt-1 left-0 right-0 z-[100] bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+            <input
+              autoFocus
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search..."
+              className="flex-1 text-sm outline-none bg-transparent"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div className="max-h-52 overflow-y-auto">
+            {loading ? (
+              <div className="px-4 py-3 text-sm text-gray-400 text-center">Loading…</div>
+            ) : filtered.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-gray-400 text-center">No owners found</div>
+            ) : (
+              filtered.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => { onSelect(o); setOpen(false); setQuery(""); }}
+                  className={`w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors ${selectedOwner?.id === o.id ? "bg-red-50" : ""}`}
+                >
+                  <span className="font-semibold text-gray-900 uppercase truncate text-left">{o.name}</span>
+                  <OwnerTypeBadge type={o.owner_type} />
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 const formatDate = (dateString: string | null | undefined): string => {
@@ -72,9 +189,8 @@ function transactionTypeBadge(type: string) {
   const isDeposit = type === "DEPOSIT";
   return (
     <span
-      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold ${
-        isDeposit ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-      }`}
+      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold ${isDeposit ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+        }`}
     >
       {isDeposit ? (
         <ArrowDownCircle className="w-3.5 h-3.5" />
@@ -123,7 +239,7 @@ function ReceiptStatsBar() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const res = await fetch("/api/accountant/saved-receipts?per_page=1000", {
+        const res = await fetch("/api/accountant/transaction-receipts?per_page=1000", {
           method: "GET",
         });
         const data = await res.json().catch(() => ({}));
@@ -159,7 +275,9 @@ export default function TransactionReceiptPage() {
 
   const [receipts, setReceipts] = useState<SavedReceipt[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [query, setQuery] = useState("");
+  const [selectedOwner, setSelectedOwner] = useState<Owner | null>(null);
+  const [owners, setOwners] = useState<Owner[]>([]);
+  const [ownersLoading, setOwnersLoading] = useState(false);
   const [voucherNo, setVoucherNo] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [dateFrom, setDateFrom] = useState("");
@@ -179,16 +297,37 @@ export default function TransactionReceiptPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteLoading, setShowDeleteLoading] = useState(false);
 
+  const fetchOwners = useCallback(async () => {
+    setOwnersLoading(true);
+    try {
+      const res = await fetch("/api/accountant/maintenance/owners?per_page=all&status=ACTIVE");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data?.data)) {
+        setOwners(data.data.data);
+      } else if (data.success && Array.isArray(data.data)) {
+        setOwners(data.data);
+      }
+    } catch {
+      console.error("Failed to fetch owners");
+    } finally {
+      setOwnersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchOwners();
+  }, [fetchOwners]);
+
   useEffect(() => {
     setCurrentPage(1);
-  }, [query, voucherNo, typeFilter, dateFrom, dateTo]);
+  }, [selectedOwner, voucherNo, typeFilter, dateFrom, dateTo]);
 
   const fetchReceipts = useCallback(async () => {
     setIsLoading(true);
     const minDelay = new Promise((r) => setTimeout(r, 300));
     try {
-      const url = new URL("/api/accountant/saved-receipts", window.location.origin);
-      if (query.trim()) url.searchParams.append("owner_name", query.trim());
+      const url = new URL("/api/accountant/transaction-receipts", window.location.origin);
+      if (selectedOwner) url.searchParams.append("owner_name", selectedOwner.name);
       if (voucherNo.trim()) url.searchParams.append("voucher_no", voucherNo.trim());
       if (typeFilter !== "ALL") url.searchParams.append("transaction_type", typeFilter);
       if (dateFrom) url.searchParams.append("date_from", dateFrom);
@@ -199,6 +338,7 @@ export default function TransactionReceiptPage() {
       const [res] = await Promise.all([fetch(url.toString(), { method: "GET" }), minDelay]);
 
       const data = await res.json();
+      console.log("RECEIPTS DATA RECEIVED:", data);
       if (res.ok && data.success) {
         const list = data.data ?? [];
         setReceipts(Array.isArray(list) ? list : []);
@@ -222,7 +362,7 @@ export default function TransactionReceiptPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [query, voucherNo, typeFilter, dateFrom, dateTo, currentPage]);
+  }, [selectedOwner, voucherNo, typeFilter, dateFrom, dateTo, currentPage]);
 
   useEffect(() => {
     fetchReceipts();
@@ -235,7 +375,7 @@ export default function TransactionReceiptPage() {
     setIsDeleting(true);
     setShowDeleteLoading(true);
     try {
-      const res = await fetch(`/api/accountant/saved-receipts/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/accountant/transaction-receipts/${id}`, { method: "DELETE" });
       const data = await res.json();
       if (res.ok && data.success) {
         await fetchReceipts();
@@ -256,7 +396,7 @@ export default function TransactionReceiptPage() {
     if (fileUrl && (fileUrl.startsWith("http://") || fileUrl.startsWith("https://"))) {
       return fileUrl;
     }
-    return `/api/accountant/saved-receipts/${receipt.id}/file`;
+    return `/api/accountant/transaction-receipts/${receipt.id}/file`;
   }
 
   const [previewFile, setPreviewFile] = useState<ViewImagePanelFile | null>(null);
@@ -293,6 +433,7 @@ export default function TransactionReceiptPage() {
       key: "display_name",
       label: "Receipt",
       flex: true,
+      sortable: true,
       renderCell: (row) => (
         <div>
           <div className="font-semibold text-base text-neutral-900">
@@ -310,12 +451,14 @@ export default function TransactionReceiptPage() {
       key: "transaction_type",
       label: "Type",
       width: "120px",
+      sortable: true,
       renderCell: (row) => transactionTypeBadge(row.transaction_type),
     },
     {
       key: "amount",
       label: "Amount",
       width: "120px",
+      sortable: true,
       renderCell: (row) =>
         row.transaction?.amount ? formatCurrency(row.transaction.amount) : "—",
     },
@@ -323,6 +466,7 @@ export default function TransactionReceiptPage() {
       key: "created_at",
       label: "Date",
       width: "110px",
+      sortable: true,
       renderCell: (row) => formatDate(row.created_at),
     },
     {
@@ -342,17 +486,6 @@ export default function TransactionReceiptPage() {
           >
             <Icons.Eye />
             View
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setDeleteTarget(row);
-            }}
-            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors active:scale-95"
-            style={{ height: 30 }}
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Delete
           </button>
         </div>
       ),
@@ -381,40 +514,47 @@ export default function TransactionReceiptPage() {
             </div>
           </div>
 
-          <SharedToolbar
-            searchQuery={query}
-            onSearchChange={(val) => setQuery(val)}
-            searchPlaceholder="Search by owner name..."
-            statusFilter={typeFilter}
-            onStatusChange={(val) => {
-              setTypeFilter(val);
-              setCurrentPage(1);
-            }}
-            onRefresh={fetchReceipts}
-            statusOptions={TRANSACTION_TYPE_OPTIONS}
-          >
-            <input
-              type="text"
-              value={voucherNo}
-              onChange={(e) => setVoucherNo(e.target.value)}
-              placeholder="Voucher #"
-              className="h-10 rounded-lg border border-gray-300 text-sm px-3 text-gray-700 bg-white focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none shrink-0 w-32"
-            />
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="h-10 rounded-lg border border-gray-300 text-sm px-3 text-gray-700 bg-white focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none shrink-0"
-              placeholder="From"
-            />
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="h-10 rounded-lg border border-gray-300 text-sm px-3 text-gray-700 bg-white focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none shrink-0"
-              placeholder="To"
-            />
-          </SharedToolbar>
+          <div className="mt-4 flex justify-end">
+            <SharedToolbar
+              statusFilter={typeFilter}
+              onStatusChange={(val) => {
+                setTypeFilter(val);
+                setCurrentPage(1);
+              }}
+              onRefresh={fetchReceipts}
+              statusOptions={TRANSACTION_TYPE_OPTIONS}
+              containerMaxWidth="w-auto"
+            >
+              <OwnerDropdown
+                placeholder="Filter by owner..."
+                owners={owners}
+                loading={ownersLoading}
+                selectedOwner={selectedOwner}
+                onSelect={setSelectedOwner}
+              />
+              <input
+                type="text"
+                value={voucherNo}
+                onChange={(e) => setVoucherNo(e.target.value)}
+                placeholder="Voucher #"
+                className="h-10 rounded-lg border border-gray-300 text-sm px-3 text-gray-700 bg-white focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none shrink-0 w-28"
+              />
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-10 rounded-lg border border-gray-300 text-sm px-3 text-gray-700 bg-white focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none w-36 shrink-0"
+                placeholder="From Date"
+              />
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-10 rounded-lg border border-gray-300 text-sm px-3 text-gray-700 bg-white focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none w-36 shrink-0"
+                placeholder="To Date"
+              />
+            </SharedToolbar>
+          </div>
 
           <div className="mt-4">
             <DataTable<SavedReceipt>
