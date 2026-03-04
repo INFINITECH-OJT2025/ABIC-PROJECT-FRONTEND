@@ -1,8 +1,48 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useRef, useEffect, ReactNode } from "react"
 import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight } from "lucide-react"
 import EmptyState from "@/components/app/EmptyState"
+import InfoTooltip from "@/components/app/InfoTooltip"
+
+// ─── Truncated Cell Wrapper ───────────────────────────────────────────────────
+
+function TruncatedCell({ content, maxWidth }: { content: ReactNode, maxWidth: string }) {
+    const textRef = useRef<HTMLDivElement>(null)
+    const [isTruncated, setIsTruncated] = useState(false)
+
+    useEffect(() => {
+        const checkTruncation = () => {
+            if (textRef.current) {
+                // Determine if actual text width exceeds visible container width
+                setIsTruncated(textRef.current.scrollWidth > textRef.current.clientWidth)
+            }
+        }
+
+        checkTruncation()
+        // Optional: Re-check on window resize in case table flexibility changes
+        window.addEventListener('resize', checkTruncation)
+        return () => window.removeEventListener('resize', checkTruncation)
+    }, [content]) // Re-run if content changes
+
+    const StringContent = typeof content === "string" || typeof content === "number" ? String(content) : undefined
+
+    const InnerCell = (
+        <div ref={textRef} className="truncate w-full inline-block align-bottom cursor-default">
+            {content ?? <span className="text-gray-300">—</span>}
+        </div>
+    )
+
+    if (isTruncated && StringContent) {
+        return (
+            <InfoTooltip text={StringContent}>
+                {InnerCell}
+            </InfoTooltip>
+        )
+    }
+
+    return InnerCell
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,12 +66,18 @@ export interface DataTableColumn<T = any> {
     flex?: boolean
     /** Fixed width (e.g. "120px") */
     width?: string
+    /** Minimum width (e.g. "150px") */
+    minWidth?: string
+    /** Maximum width (e.g. "200px") - automatically applies truncation and tooltip */
+    maxWidth?: string
     /** Text alignment. Default "left" */
     align?: "left" | "center" | "right"
     /** Whether this column is sortable */
     sortable?: boolean
     /** Hide column */
     hidden?: boolean
+    /** Custom class for the th cell */
+    headerClassName?: string
     /** Custom render for cell content */
     renderCell?: (row: T, rowIndex: number) => React.ReactNode
 }
@@ -101,7 +147,7 @@ function SkeletonRow({ columns, rowIndex }: { columns: DataTableColumn[], rowInd
                 <td
                     key={col.key}
                     className="px-4 py-3"
-                    style={{ width: col.width }}
+                    style={{ width: col.width, minWidth: col.minWidth, maxWidth: col.maxWidth }}
                 >
                     <div className="h-8 bg-gray-200 rounded animate-pulse w-full" />
                 </td>
@@ -282,14 +328,12 @@ export default function DataTable<T extends Record<string, any>>({
                                     <th
                                         key={col.key}
                                         className={`
-                                            px-4 py-3 font-semibold text-sm uppercase tracking-wider whitespace-nowrap
-                                            select-none group
-                                            ${alignClass(col.align)}
-                                            ${col.sortable ? "cursor-pointer hover:bg-[#65101a] transition-colors" : ""}
-                                            text-white
-                                            bg-[#7a0f1f]
+                                            px-4 py-3 font-bold text-[11px] uppercase tracking-wider whitespace-pre-wrap
+                                            select-none
+                                            ${col.sortable ? "cursor-pointer transition-colors" : ""}
+                                            ${col.headerClassName ? col.headerClassName : "text-white bg-[#7a0f1f] hover:bg-[#65101a]"}
                                         `}
-                                        style={{ width: col.width }}
+                                        style={{ width: col.width, minWidth: col.minWidth, maxWidth: col.maxWidth }}
                                         onClick={() => handleHeaderClick(col)}
                                     >
 
@@ -342,9 +386,13 @@ export default function DataTable<T extends Record<string, any>>({
                                                 <td
                                                     key={col.key}
                                                     className={`px-4 py-3.5 text-sm text-gray-700 ${alignClass(col.align)} ${col.flex ? "w-full" : ""}`}
-                                                    style={{ width: col.width }}
+                                                    style={{ width: col.width, minWidth: col.minWidth, maxWidth: col.maxWidth }}
                                                 >
-                                                    {cell ?? <span className="text-gray-300">—</span>}
+                                                    {col.maxWidth ? (
+                                                        <TruncatedCell content={cell} maxWidth={col.maxWidth} />
+                                                    ) : (
+                                                        cell ?? <span className="text-gray-300">—</span>
+                                                    )}
                                                 </td>
                                             )
                                         })}

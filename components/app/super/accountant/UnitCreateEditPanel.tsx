@@ -41,7 +41,8 @@ export interface UnitCreateEditPanelProps {
     /** Pre-fill the unit name field in create mode (e.g. from a search query). */
     defaultName?: string;
     onClose: () => void;
-    onSaved: () => void;
+    /** Called after save. Passes the created/updated unit when available. */
+    onSaved: (savedUnit?: { id: number; unit_name: string; status: string } | null) => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -277,7 +278,10 @@ export default function UnitCreateEditPanel({
                 isEdit ? "Unit details updated successfully." : "New unit created successfully.",
                 "success"
             );
-            onSaved();
+            const savedUnit = data.data
+                ? { id: data.data.id, unit_name: data.data.unit_name ?? unitName.trim(), status: data.data.status ?? "ACTIVE" }
+                : null;
+            onSaved(savedUnit);
             handleClose();
         } catch (err: unknown) {
             showToast("Save Failed", err instanceof Error ? err.message : "An error occurred.", "error");
@@ -797,18 +801,18 @@ export default function UnitCreateEditPanel({
                     onCancel={() => setShowConfirmModal(false)}
                     onConfirm={performSave}
                     isConfirming={isSaving}
-                    zIndex={300}
+                    zIndex={400}
                 />,
                 document.body
             )}
 
-            {/* Loading Modal - rendered outside portal with higher z-index */}
+            {/* Loading Modal - above panel and confirmation for visibility */}
             {isSaving && createPortal(
                 <LoadingModal
                     isOpen={isSaving}
                     title={isEdit ? "Updating Unit" : "Creating Unit"}
                     message={isEdit ? "Please wait while we update the unit details..." : "Please wait while we create the new unit..."}
-                    zIndex={300}
+                    zIndex={410}
                 />,
                 document.body
             )}
