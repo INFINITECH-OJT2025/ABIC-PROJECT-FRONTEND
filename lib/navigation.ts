@@ -76,7 +76,7 @@ export const superAdminNav: NavEntry[] = [
     { type: "divider" },
     { type: "section", label: "Accountant" },
     { type: "link", label: "ACCOUNTANT PANEL", href: "/super/accountant/accountant-panel", icon: LayoutDashboard, exact: true },
-    {
+        {
         type: "group", label: "VOUCHERS", icon: Banknote, items: [
             { label: "Cash Voucher", href: "/super/accountant/voucher/cash-voucher", icon: Plus },
             { label: "Cheque Voucher", href: "/super/accountant/voucher/cheque-voucher", icon: Plus },

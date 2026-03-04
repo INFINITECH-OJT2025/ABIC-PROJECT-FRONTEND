@@ -25,6 +25,12 @@ import DataTable, { DataTableColumn } from "@/components/app/DataTable";
 import EmptyState from "@/components/app/EmptyState";
 import DownloadButton from "@/components/ui/voucher-download-button";
 import ConfirmationModal from "@/components/app/ConfirmationModal";
+import AppHeader from "@/components/app/AppHeader";
+import SharedToolbar from "@/components/app/SharedToolbar";
+import { superAdminNav } from "@/lib/navigation";
+
+const ACCENT = "#7a0f1f";
+
 
 // =========================
 // Edit Form (kept same logic)
@@ -487,7 +493,7 @@ interface CashVoucher {
 
 type SortField = "date" | "voucher_no" | "paid_to" | "total_amount";
 type SortOrder = "asc" | "desc";
-type StatusFilter = "ALL" | "SAVED" | "CANCELLED";
+type StatusFilter = "ALL" | "APPROVED" | "CANCELLED";
 
 type ViewMode = "cards" | "table";
 
@@ -511,7 +517,7 @@ const formatAmount = (amount: number) =>
 
 const statusPill = (status: string) => {
   switch ((status || "").toLowerCase()) {
-    case "done":
+    case "approved":
     case "completed":
       return "bg-green-100 text-green-700";
     case "pending":
@@ -566,9 +572,13 @@ export default function CashVoucherListPage() {
   // ✅ View mode toggle (Cards / Table)
   const [viewMode, setViewMode] = useState<ViewMode>("table");
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   // Side Panel
   const [selectedVoucher, setSelectedVoucher] = useState<CashVoucher | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [panelMode, setPanelMode] = useState<"view" | "edit">("view");
   const [editFormData, setEditFormData] = useState<PrintableData | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -615,6 +625,7 @@ export default function CashVoucherListPage() {
     setSortField("date");
     setSortOrder("desc");
     setStatusFilter("ALL");
+    setCurrentPage(1);
   };
 
   const hasFilters = useMemo(() => {
@@ -672,14 +683,14 @@ export default function CashVoucherListPage() {
     if (statusFilter !== "ALL") {
       const map: Record<StatusFilter, string> = {
         ALL: "",
-        SAVED: "approved",
+        APPROVED: "approved",
         CANCELLED: "cancelled",
       };
       const target = map[statusFilter];
       filtered = filtered.filter(
         (v) =>
           (v.status || "").toLowerCase() === target ||
-          (target === "approved" && ["saved", "completed", "done"].includes((v.status || "").toLowerCase()))
+          (target === "approved" && ["Approved", "completed", "done"].includes((v.status || "").toLowerCase()))
       );
     }
 
@@ -715,13 +726,35 @@ export default function CashVoucherListPage() {
     return filtered;
   }, [vouchers, searchQuery, statusFilter, sortField, sortOrder]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, sortField, sortOrder]);
+
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return computed.slice(start, start + itemsPerPage);
+  }, [computed, currentPage, itemsPerPage]);
+
+  const paginationMeta = useMemo(() => {
+    return {
+      current_page: currentPage,
+      last_page: Math.ceil(computed.length / itemsPerPage) || 1,
+      per_page: itemsPerPage,
+      total: computed.length,
+      from: computed.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1,
+      to: Math.min(currentPage * itemsPerPage, computed.length),
+    };
+  }, [computed.length, currentPage, itemsPerPage]);
+
   const openPanelView = (voucher: CashVoucher) => {
     setSelectedVoucher(voucher);
+    setPanelMode("view");
     setEditFormData(getPreviewData(voucher));
     setIsPanelOpen(true);
   };
 
   const openPanelEdit = (voucher: CashVoucher) => {
+
     setSelectedVoucher(voucher);
     setPanelMode("edit");
     setEditFormData(getPreviewData(voucher));
@@ -729,11 +762,13 @@ export default function CashVoucherListPage() {
   };
 
   const closePanel = () => {
-    setIsPanelOpen(false);
+    setIsClosing(true);
     setTimeout(() => {
+      setIsPanelOpen(false);
+      setIsClosing(false);
       setSelectedVoucher(null);
       setEditFormData(null);
-    }, 300);
+    }, 350); // Matches the slideOut duration
   };
 
   const handleSaveVoucher = useCallback(
@@ -873,15 +908,16 @@ export default function CashVoucherListPage() {
       renderCell: (v) => (
         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
           <button
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:border-[#7B0F2B]/30 hover:bg-[#7B0F2B]/5 transition text-xs font-semibold"
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-200 bg-white text-white hover:border-[#7B0F2B]/30 hover:bg-[#7B0F2B]/5 transition text-xs font-semibold"
             onClick={() => openPanelView(v)}
             title="View"
+            style={{ background: ACCENT, height: 30 }}
           >
             <Eye className="w-4 h-4" />
             View
           </button>
           <button
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:border-[#7B0F2B]/30 hover:bg-[#7B0F2B]/5 transition text-xs font-semibold"
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#7B0F2B]/30 hover:bg-[#7B0F2B]/5 transition text-xs font-semibold"
             onClick={() => openPanelEdit(v)}
             title="Edit"
           >
@@ -890,7 +926,7 @@ export default function CashVoucherListPage() {
           </button>
           {(v.status || "").toLowerCase() !== "cancelled" && (
             <button
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-red-200 bg-white text-red-700 hover:border-red-300 hover:bg-red-50 transition text-xs font-semibold"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-red-200 bg-white text-red-700 hover:border-red-300 hover:bg-red-50 transition text-xs font-semibold"
               onClick={() => handleCancelVoucher(v.id)}
               title="Cancel Voucher"
             >
@@ -907,18 +943,24 @@ export default function CashVoucherListPage() {
   // Side Panel
   // =========================
   const VoucherSidePanel = () => {
+    // If we're not open and not closing, render nothing
+    if (!isPanelOpen && !isClosing) return null;
     if (!selectedVoucher || !editFormData) return null;
 
     return (
       <>
         <div
-          className={`fixed inset-0 bg-black/50 z-40 transition-opacity duration-300 ${isPanelOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-            }`}
+          className={`fixed inset-0 bg-black/50 z-40 transition-opacity duration-[350ms] ${isClosing ? "opacity-0" : "opacity-100"}`}
           onClick={closePanel}
+          aria-hidden="true"
         />
+
         <div
-          className={`fixed top-0 right-0 h-full max-w-screen-xl max-w-4xl bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${isPanelOpen ? "translate-x-0" : "translate-x-full"
-            }`}
+          className="fixed top-0 right-0 h-full max-w-screen-xl max-w-4xl bg-white shadow-2xl z-50 transform transition-all duration-300 ease-in-out"
+          style={{
+            animation: isClosing ? "slideOut 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards" : "slideIn 0.4s cubic-bezier(0.32, 0.72, 0, 1)",
+            boxShadow: "-8px 0 24px rgba(0,0,0,0.15)",
+          }}
         >
           <div className="h-full flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
@@ -1018,334 +1060,113 @@ export default function CashVoucherListPage() {
     );
   };
 
-  const inputClass =
-    "w-full rounded-xl border border-gray-200 px-4 py-2.5 h-10 text-sm outline-none focus:ring-2 focus:ring-[#7B0F2B]/20 focus:border-[#7B0F2B] transition-all";
 
-  const ViewToggle = () => {
-    return (
-      <div className="inline-flex rounded-xl border border-gray-200 bg-white p-1">
-        <button
-          type="button"
-          onClick={() => setViewMode("cards")}
-          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition ${viewMode === "cards"
-            ? "bg-[#7B0F2B] text-white"
-            : "text-gray-700 hover:bg-gray-50"
-            }`}
-          aria-pressed={viewMode === "cards"}
-        >
-          <LayoutGrid className="w-4 h-4" />
-          Cards
-        </button>
-        <button
-          type="button"
-          onClick={() => setViewMode("table")}
-          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition ${viewMode === "table"
-            ? "bg-[#7B0F2B] text-white"
-            : "text-gray-700 hover:bg-gray-50"
-            }`}
-          aria-pressed={viewMode === "table"}
-        >
-          <List className="w-4 h-4" />
-          Table
-        </button>
-      </div>
-    );
-  };
 
   return (
-    <div className="min-h-full flex flex-col bg-gray-50/80">
-      <div className="flex-1 min-h-0 flex flex-col">
-        {/* Sticky header */}
-        <div className="sticky top-0 z-20 bg-gray-50 shrink-0 pb-6 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)]">
-          <div className="relative overflow-hidden bg-gradient-to-br from-[#7B0F2B] via-[#8B1535] to-[#5E0C20] text-white px-6 py-8">
-            <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-50" />
-            <div className="relative flex items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center border border-white/20">
-                  <Wallet className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold tracking-tight">Cash Vouchers</h1>
-                  <p className="text-white/80 text-sm mt-0.5">
-                    Search, view, and edit cash voucher transactions
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => router.push("/super/accountant/voucher/cash-voucher")}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-sm transition-colors backdrop-blur"
-              >
-                <Plus className="w-4 h-4" />
-                Create Cash Voucher
-              </button>
-            </div>
-          </div>
-
-          {/* Filter card */}
-          <div className="px-4 sm:px-6 lg:px-8 mt-6">
-            <section className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-visible">
-              <div className="p-6 bg-gray-50/50 border-b border-gray-100">
-                <div className="flex items-center justify-between mb-4 gap-3">
-                  <div>
-                    <h2 className="text-lg font-bold text-gray-900">Filters</h2>
-                    <p className="text-xs text-gray-500">
-                      Use search, status, and sorting to find vouchers quickly
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-3 flex-wrap justify-end">
-                    <ViewToggle />
-
-                    {hasFilters && (
-                      <span className="text-xs font-semibold text-[#7B0F2B] bg-[#7B0F2B]/10 px-3 py-1 rounded-full">
-                        Filters Active
-                      </span>
-                    )}
-
-                    {hasFilters && (
-                      <button
-                        onClick={resetFilters}
-                        className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                        Reset
-                      </button>
-                    )}
-
+    <div className="min-h-full flex flex-col">
+      <AppHeader
+        navigation={superAdminNav}
+        subtitle="Search, view, and edit cash voucher transactions"
+        primaryAction={
                     <button
-                      onClick={() => setFiltersOpen((v) => !v)}
-                      className="px-4 py-2 text-sm font-semibold text-white bg-[#7B0F2B] rounded-xl hover:bg-[#8B1535] transition-colors"
-                    >
-                      {filtersOpen ? "Hide Filters" : "Show Filters"}
-                    </button>
-                  </div>
-                </div>
+              onClick={() => router.push("/super/accountant/voucher/cash-voucher")}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-[#7a0f1f] rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm">
+              <Plus className="w-4 h-4" />
+              Create Cash Voucher
+            </button>
+                }
+      />
 
-                {filtersOpen && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {/* Search */}
-                    <div className="flex flex-col">
-                      <label className="block text-sm font-medium mb-2 text-gray-900">Search</label>
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500 pointer-events-none" />
-                        <input
-                          type="text"
-                          placeholder="Voucher no., payee, status, amount..."
-                          value={searchDraft}
-                          onChange={(e) => setSearchDraft(e.target.value)}
-                          className={`${inputClass} pl-10 pr-10`}
-                        />
-                        {searchDraft && (
-                          <button
-                            onClick={() => setSearchDraft("")}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-[#7B0F2B] transition-colors p-1 rounded hover:bg-[#7B0F2B]/10"
-                            aria-label="Clear"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Status */}
-                    <div className="flex flex-col">
-                      <label className="block text-sm font-medium mb-2 text-gray-900">Status</label>
-                      <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-                        className={inputClass}
-                      >
-                        <option value="ALL">All</option>
-                        <option value="SAVED">Saved</option>
-                        <option value="CANCELLED">Cancelled</option>
-                      </select>
-                    </div>
-
-                    {/* Sort Field */}
-                    <div className="flex flex-col">
-                      <label className="block text-sm font-medium mb-2 text-gray-900">Sort by</label>
-                      <select
-                        value={sortField}
-                        onChange={(e) => setSortField(e.target.value as SortField)}
-                        className={inputClass}
-                      >
-                        <option value="date">Date</option>
-                        <option value="voucher_no">Voucher No</option>
-                        <option value="paid_to">Paid To</option>
-                        <option value="total_amount">Amount</option>
-                      </select>
-                    </div>
-
-                    {/* Sort Order */}
-                    <div className="flex flex-col">
-                      <label className="block text-sm font-medium mb-2 text-gray-900">Order</label>
-                      <button
-                        type="button"
-                        onClick={() => setSortOrder((p) => (p === "asc" ? "desc" : "asc"))}
-                        className="h-10 px-4 rounded-xl border border-gray-200 bg-white text-gray-700 hover:border-[#7B0F2B]/30 hover:bg-[#7B0F2B]/5 transition-all flex items-center justify-center gap-2 text-sm font-semibold"
-                      >
-                        <ArrowUpDown className="w-4 h-4" />
-                        {sortOrder === "asc" ? "Ascending" : "Descending"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 lg:px-8 mt-6 pb-6">
-          <section className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-6">
-              {loading ? (
-                viewMode === "cards" ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {[...Array(12)].map((_, i) => (
-                      <div key={i} className="rounded-2xl border border-gray-100 overflow-hidden bg-white">
-                        <div className="h-44 bg-gray-100 animate-pulse" />
-                        <div className="p-4 space-y-2">
-                          <div className="h-4 bg-gray-100 animate-pulse rounded" />
-                          <div className="h-4 bg-gray-100 animate-pulse rounded w-3/4" />
-                          <div className="h-8 bg-gray-100 animate-pulse rounded mt-2" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {[...Array(8)].map((_, i) => (
-                      <div key={i} className="h-12 rounded-xl bg-gray-100 animate-pulse" />
-                    ))}
-                  </div>
-                )
-              ) : computed.length > 0 ? (
-                <>
-                  <div className="flex items-center justify-between mb-4">
-                    <p className="text-sm text-gray-600">
-                      Showing <span className="font-semibold text-gray-900">{computed.length}</span>{" "}
-                      cash voucher(s)
-                    </p>
-                  </div>
-
-                  {/* ✅ Cards View */}
-                  {viewMode === "cards" ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                      {computed.map((voucher) => {
-                        const previewData = previewMap.get(voucher.id);
-
-                        return (
-                          <div
-                            key={voucher.id}
-                            onClick={() => openPanelView(voucher)}
-                            className="group rounded-2xl border border-gray-100 overflow-hidden bg-white cursor-pointer hover:shadow-lg hover:border-[#7B0F2B]/30 hover:-translate-y-0.5 transition-all duration-200"
-                          >
-                            {/* Top preview */}
-                            <div className="relative h-44">
-                              {previewData ? (
-                                <CashVoucherCardPreview data={previewData} scale={0.55} />
-                              ) : (
-                                <div className="h-full bg-gray-50 flex items-center justify-center">
-                                  <div className="w-16 h-16 rounded-2xl bg-[#7B0F2B]/10 flex items-center justify-center">
-                                    <Wallet className="w-8 h-8 text-[#7B0F2B]" />
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Status pill */}
-                              <div className="absolute top-3 left-3">
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${statusPill(
-                                    voucher.status
-                                  )}`}
-                                >
-                                  {voucher.status || "Pending"}
-                                </span>
-                              </div>
-
-                              {/* Action buttons overlay */}
-                              <div
-                                className="absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <button
-                                  className="p-2 rounded-xl bg-white/90 border border-gray-200 hover:border-[#7B0F2B]/30 hover:bg-white transition"
-                                  title="View"
-                                  onClick={() => openPanelView(voucher)}
-                                >
-                                  <Eye className="w-4 h-4 text-gray-700" />
-                                </button>
-                                <button
-                                  className="p-2 rounded-xl bg-white/90 border border-gray-200 hover:border-[#7B0F2B]/30 hover:bg-white transition"
-                                  title="Edit"
-                                  onClick={() => openPanelEdit(voucher)}
-                                >
-                                  <Edit2 className="w-4 h-4 text-gray-700" />
-                                </button>
-                                {(voucher.status || "").toLowerCase() !== "cancelled" && (
-                                  <button
-                                    className="p-2 rounded-xl bg-white/90 border border-red-200 hover:border-red-300 hover:bg-red-50 transition"
-                                    title="Cancel Voucher"
-                                    onClick={() => handleCancelVoucher(voucher.id)}
-                                  >
-                                    <Ban className="w-4 h-4 text-red-600" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Bottom colored block */}
-                            <div className="bg-[#7B0F2B] p-4 text-white">
-                              <p className="text-sm font-semibold truncate">{voucher.paid_to || "No Payee"}</p>
-                              <p className="text-xs text-white/80 mt-0.5 truncate">{voucher.voucher_no}</p>
-
-                              <p className="text-lg font-bold mt-2">{formatAmount(voucher.total_amount)}</p>
-
-                              <div className="mt-3 text-xs text-white/90 flex items-center justify-between">
-                                <span>{formatDateShort(voucher.date)}</span>
-                                <span className="font-medium opacity-0 group-hover:opacity-100 transition">
-                                  Click to preview
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    /* ✅ Table View */
-                    <DataTable
-                      columns={tableColumns}
-                      rows={computed}
-                      onRowClick={(row) => openPanelView(row)}
-                      sortKey={sortField}
-                      sortDirection={sortOrder}
-                      onSort={(key, dir) => {
-                        if (dir === null) return;
-                        setSortField(key as SortField);
-                        setSortOrder(dir);
-                      }}
-                    />
-                  )}
-                </>
-              ) : (
-                <EmptyState
-                  title={hasFilters ? "No vouchers found" : "No vouchers yet"}
-                  description={
-                    hasFilters
-                      ? "No cash vouchers match your current filters. Try adjusting your search criteria."
-                      : "Cash vouchers will appear here once created."
-                  }
-                />
-              )}
+      <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8">
+        <section
+          className="rounded-md bg-white p-5 shadow-sm border"
+          style={{ borderColor: "rgba(0,0,0,0.12)" }}
+        >
+          {/* ── Section header ── */}
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-[#5f0c18]">Cash Vouchers</h2>
+              <p className="text-sm text-gray-600 mt-1">Search, view, and edit cash voucher transactions</p>
             </div>
-          </section>
-        </div>
+            {/* <button
+              onClick={() => router.push("/super/accountant/voucher/cash-voucher")}
+              className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white hover:opacity-95"
+              style={{ background: "#7a0f1f", height: 40 }}
+            >
+              <Plus className="w-4 h-4" />
+              Create Cash Voucher
+            </button> */}
+          </div>
+
+          {/* ── Filters ── */}
+          <SharedToolbar
+            searchQuery={searchDraft}
+            onSearchChange={(val) => setSearchDraft(val)}
+            searchPlaceholder="Voucher no., payee, status, amount..."
+            statusFilter={statusFilter}
+            onStatusChange={(val) => { setStatusFilter(val as StatusFilter); }}
+            onRefresh={fetchVouchers}
+            statusOptions={[
+              { value: "ALL", label: "All" },
+              { value: "APPROVED", label: "Approved" },
+              { value: "CANCELLED", label: "Cancelled" }
+            ]}
+          >
+            {/* <ViewToggle /> */}
+          </SharedToolbar>
+          {/* ── Table ── */}
+<div className="mt-4">
+  {loading ? (
+    <div className="space-y-3">
+      {[...Array(8)].map((_, i) => (
+        <div key={i} className="h-12 rounded-xl bg-gray-100 animate-pulse" />
+      ))}
+    </div>
+  ) : computed.length > 0 ? (
+    <>
+      {/* ── Table View Only ── */}
+      <DataTable
+        columns={tableColumns}
+        rows={paginatedRows}
+        onRowClick={(row) => openPanelView(row)}
+        sortKey={sortField}
+        sortDirection={sortOrder}
+        onSort={(key, dir) => {
+          if (dir === null) return;
+          setSortField(key as SortField);
+          setSortOrder(dir);
+        }}
+        pagination={paginationMeta}
+        onPageChange={(page) => setCurrentPage(page)}
+        itemName="cash vouchers"
+      />
+    </>
+  ) : (
+    <EmptyState
+      title={hasFilters ? "No vouchers found" : "No vouchers yet"}
+      description={
+        hasFilters
+          ? "No cash vouchers match your current filters. Try adjusting your search criteria."
+          : "Cash vouchers will appear here once created."
+      }
+    />
+  )}
+</div>
+        </section>
       </div>
 
       <VoucherSidePanel />
+
+      <style jsx>{`
+        @keyframes slideIn {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+        @keyframes slideOut {
+            from { transform: translateX(0); }
+            to { transform: translateX(100%); }
+        }
+      `}</style>
 
       {/* Confirmation Modal for Canceling Voucher */}
       <ConfirmationModal
