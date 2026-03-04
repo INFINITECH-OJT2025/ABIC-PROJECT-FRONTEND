@@ -20,8 +20,8 @@ export interface SharedToolbarProps {
     searchQuery: string;
     onSearchChange: (query: string) => void;
     searchPlaceholder?: string;
-    statusFilter: string;
-    onStatusChange: (status: string) => void;
+    statusFilter?: string;
+    onStatusChange?: (status: string) => void;
     onRefresh: () => void;
     statusOptions?: { label: string; value: string }[];
     containerMaxWidth?: string;
@@ -58,17 +58,19 @@ export default function SharedToolbar({
 
                 {children}
 
-                <select
-                    value={statusFilter}
-                    onChange={(e) => onStatusChange(e.target.value)}
-                    className="h-10 rounded-lg border border-gray-300 text-sm px-3 text-gray-700 bg-white focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none shrink-0"
-                >
-                    {statusOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                        </option>
-                    ))}
-                </select>
+                {statusFilter !== undefined && onStatusChange && (
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => onStatusChange(e.target.value)}
+                        className="h-10 rounded-lg border border-gray-300 text-sm px-3 text-gray-700 bg-white focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none shrink-0"
+                    >
+                        {statusOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                            </option>
+                        ))}
+                    </select>
+                )}
 
                 <div className="relative flex-1">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">

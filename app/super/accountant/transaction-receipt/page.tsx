@@ -1,19 +1,20 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { FileText, Search, Receipt } from "lucide-react";
-import { ReceiptCardSkeleton } from "@/components/accountant/saved-receipts/ReceiptCardSkeleton";
-import { ImagePreviewPanel } from "@/components/accountant/ledger";
-import { OwnerSearchableDropdown, type Owner } from "@/components/accountant/transaction";
-import {
-  MaintenancePageLayout,
-  MaintenanceFilterCard,
-  MaintenanceSectionCard,
-  MaintenanceEmptyState,
-  MaintenancePagination,
-} from "@/components/accountant/maintenance";
+import React, { useState, useEffect, useCallback } from "react";
+import SummaryBar, { StatPill } from "@/components/app/SummaryBar";
+import { Receipt, ArrowDownCircle, ArrowUpCircle, FileText, Eye, Trash2 } from "lucide-react";
+import ConfirmationModal from "@/components/app/ConfirmationModal";
+import LoadingModal from "@/components/app/LoadingModal";
+import { useAppToast } from "@/components/app/toast/AppToastProvider";
+import AppHeader from "@/components/app/AppHeader";
+import SharedToolbar from "@/components/app/SharedToolbar";
+import DataTable, { DataTableColumn } from "@/components/app/DataTable";
+import ViewImagePanel, { ViewImagePanelFile } from "@/components/app/ViewImagePanel";
+import { superAdminNav } from "@/lib/navigation";
 
-interface TransactionReceipt {
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface SavedReceipt {
   id: number;
   transaction_id: number | null;
   transaction_type: string;
@@ -21,392 +22,447 @@ interface TransactionReceipt {
   file_path: string;
   file_type: string;
   file_size: number | null;
-  receipt_data: unknown;
-  file_url?: string;
+  receipt_data: Record<string, unknown> | null;
   display_name?: string;
+  file_url?: string;
   created_at: string;
   transaction?: {
-    id: number;
     voucher_no: string | null;
+    voucher_date: string | null;
     amount: string;
+    particulars: string | null;
+    from_owner?: { name: string };
+    to_owner?: { name: string };
   };
 }
 
-interface PaginationInfo {
-  current_page: number;
-  last_page: number;
-  per_page: number;
-  total: number;
-  from: number | null;
-  to: number | null;
+const BORDER = "rgba(0,0,0,0.12)";
+const ACCENT = "#7a0f1f";
+
+const TRANSACTION_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "ALL", label: "All Types" },
+  { value: "DEPOSIT", label: "Deposit" },
+  { value: "WITHDRAWAL", label: "Withdrawal" },
+];
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+const formatDate = (dateString: string | null | undefined): string => {
+  if (!dateString) return "—";
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "—";
+    return date.toLocaleDateString();
+  } catch {
+    return "—";
+  }
+};
+
+const formatCurrency = (val: string | number | null | undefined): string => {
+  if (val == null || val === "") return "—";
+  const n = typeof val === "string" ? parseFloat(val) : val;
+  if (isNaN(n)) return "—";
+  return new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+  }).format(n);
+};
+
+function transactionTypeBadge(type: string) {
+  const isDeposit = type === "DEPOSIT";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold ${
+        isDeposit ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+      }`}
+    >
+      {isDeposit ? (
+        <ArrowDownCircle className="w-3.5 h-3.5" />
+      ) : (
+        <ArrowUpCircle className="w-3.5 h-3.5" />
+      )}
+      {type}
+    </span>
+  );
 }
 
-interface SearchFilters {
-  owner_id: number | null;
-  owner_name: string;
-  voucher_no: string;
-  date_from: string;
-  date_to: string;
-  transaction_type: "ALL" | "DEPOSIT" | "WITHDRAWAL";
-}
+// ─── Icons ────────────────────────────────────────────────────────────────────
 
-const formatDate = (dateString: string) =>
-  new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+const Icons = {
+  Eye: (props: React.SVGProps<SVGSVGElement>) => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle
+        cx="12"
+        cy="12"
+        r="3"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
+};
 
-const formatAmount = (amount: string) =>
-  `₱ ${parseFloat(amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+// ─── Stats Bar ────────────────────────────────────────────────────────────────
 
-export default function SavedReceiptsPage() {
-  const [receipts, setReceipts] = useState<SavedReceipt[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedReceipt, setSelectedReceipt] = useState<SavedReceipt | null>(null);
-  const [panelClosing, setPanelClosing] = useState(false);
-  const [pagination, setPagination] = useState<PaginationInfo | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const perPage = 12;
-  const [filtersOpen, setFiltersOpen] = useState(true);
-  const [debouncedVoucher, setDebouncedVoucher] = useState("");
-
-  const [filters, setFilters] = useState<SearchFilters>({
-    owner_id: null,
-    owner_name: "",
-    voucher_no: "",
-    date_from: "",
-    date_to: "",
-    transaction_type: "ALL",
-  });
-
-  const [owners, setOwners] = useState<Owner[]>([]);
-  const [ownerSearchQuery, setOwnerSearchQuery] = useState("");
-  const [showOwnerDropdown, setShowOwnerDropdown] = useState(false);
-  const [loadingOwners, setLoadingOwners] = useState(false);
-
-  const filteredOwners = useMemo(() => {
-    if (!ownerSearchQuery.trim()) {
-      return owners.filter((o) => {
-        const status = (o.status ?? "ACTIVE").toString().toUpperCase();
-        const type = (o.owner_type ?? "").toString().toUpperCase();
-        return status === "ACTIVE" && type !== "SYSTEM" && type !== "MAIN";
-      });
-    }
-    const q = ownerSearchQuery.toLowerCase();
-    return owners.filter((o) => {
-      const status = (o.status ?? "ACTIVE").toString().toUpperCase();
-      const type = (o.owner_type ?? "").toString().toUpperCase();
-      return (
-        status === "ACTIVE" &&
-        type !== "SYSTEM" &&
-        type !== "MAIN" &&
-        (o.name?.toLowerCase().includes(q) ||
-          o.email?.toLowerCase().includes(q) ||
-          o.phone?.toLowerCase().includes(q))
-      );
-    });
-  }, [owners, ownerSearchQuery]);
+function ReceiptStatsBar() {
+  const [stats, setStats] = useState<{
+    total: number;
+    depositCount: number;
+    withdrawalCount: number;
+  } | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setFilters((prev) => ({ ...prev, voucher_no: debouncedVoucher }));
-      setCurrentPage(1);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [debouncedVoucher]);
+    async function fetchStats() {
+      try {
+        const res = await fetch("/api/accountant/saved-receipts?per_page=1000", {
+          method: "GET",
+        });
+        const data = await res.json().catch(() => ({}));
 
-  const fetchOwners = async () => {
-    setLoadingOwners(true);
-    try {
-      const res = await fetch("/api/accountant/maintenance/owners?status=ACTIVE&per_page=all");
-      const data = await res.json();
-      if (res.ok && data.success) {
-        const list = data.data?.data ?? data.data ?? [];
-        setOwners(
-          Array.isArray(list)
-            ? list.filter((o: Owner) => {
-                const type = (o.owner_type ?? "").toString().toUpperCase();
-                return type !== "SYSTEM" && type !== "MAIN";
-              })
-            : []
-        );
-      } else setOwners([]);
-    } catch {
-      setOwners([]);
-    } finally {
-      setLoadingOwners(false);
+        if (res.ok && data.success && Array.isArray(data.data)) {
+          const list = data.data as SavedReceipt[];
+          setStats({
+            total: list.length,
+            depositCount: list.filter((r) => r.transaction_type === "DEPOSIT").length,
+            withdrawalCount: list.filter((r) => r.transaction_type === "WITHDRAWAL").length,
+          });
+        }
+      } catch (err) {
+        console.error("ReceiptStatsBar: failed to fetch stats", err);
+      }
     }
-  };
-
-  useEffect(() => {
-    fetchOwners();
+    fetchStats();
   }, []);
 
-  const hasFilters = useMemo(
-    () =>
-      !!(filters.owner_id || filters.owner_name || filters.voucher_no || filters.date_from || filters.date_to || filters.transaction_type !== "ALL"),
-    [filters]
+  return (
+    <SummaryBar>
+      <StatPill icon={Receipt} label="Total" value={stats?.total ?? null} />
+      <StatPill icon={ArrowDownCircle} label="Deposits" value={stats?.depositCount ?? null} />
+      <StatPill icon={ArrowUpCircle} label="Withdrawals" value={stats?.withdrawalCount ?? null} />
+    </SummaryBar>
   );
+}
 
-  const fetchReceipts = React.useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ page: String(currentPage), per_page: String(perPage) });
-      if (filters.owner_id) params.append("owner_id", String(filters.owner_id));
-      if (filters.owner_name) params.append("owner_name", filters.owner_name);
-      if (filters.voucher_no) params.append("voucher_no", filters.voucher_no);
-      if (filters.date_from) params.append("date_from", filters.date_from);
-      if (filters.date_to) params.append("date_to", filters.date_to);
-      if (filters.transaction_type !== "ALL") params.append("transaction_type", filters.transaction_type);
+// ─── Main Page ──────────────────────────────────────────────────────────────────
 
-      const res = await fetch(`/api/accountant/saved-receipts?${params}`);
-      const data = await res.json();
-      if (data.success) {
-        setReceipts(data.data ?? []);
-        setPagination(data.pagination ?? null);
-      } else {
-        setReceipts([]);
-        setPagination(null);
-      }
-    } catch {
-      setReceipts([]);
-      setPagination(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [filters, currentPage]);
+export default function TransactionReceiptPage() {
+  const { showToast } = useAppToast();
+
+  const [receipts, setReceipts] = useState<SavedReceipt[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [voucherNo, setVoucherNo] = useState("");
+  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [paginationMeta, setPaginationMeta] = useState<{
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    from: number;
+    to: number;
+  } | null>(null);
+
+  const [previewReceipt, setPreviewReceipt] = useState<SavedReceipt | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SavedReceipt | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteLoading, setShowDeleteLoading] = useState(false);
 
   useEffect(() => {
-    if (hasFilters) fetchReceipts();
-    else {
-      setReceipts([]);
-      setPagination(null);
-      setLoading(false);
-    }
-  }, [hasFilters, fetchReceipts]);
-
-
-  const handleResetFilters = () => {
-    setFilters({
-      owner_id: null,
-      owner_name: "",
-      voucher_no: "",
-      date_from: "",
-      date_to: "",
-      transaction_type: "ALL",
-    });
-    setOwnerSearchQuery("");
-    setDebouncedVoucher("");
     setCurrentPage(1);
-  };
+  }, [query, voucherNo, typeFilter, dateFrom, dateTo]);
 
-  const inputClass =
-    "w-full rounded-xl border border-gray-200 px-4 py-2.5 h-10 text-sm outline-none focus:ring-2 focus:ring-[#7B0F2B]/20 focus:border-[#7B0F2B] transition-all";
+  const fetchReceipts = useCallback(async () => {
+    setIsLoading(true);
+    const minDelay = new Promise((r) => setTimeout(r, 300));
+    try {
+      const url = new URL("/api/accountant/saved-receipts", window.location.origin);
+      if (query.trim()) url.searchParams.append("owner_name", query.trim());
+      if (voucherNo.trim()) url.searchParams.append("voucher_no", voucherNo.trim());
+      if (typeFilter !== "ALL") url.searchParams.append("transaction_type", typeFilter);
+      if (dateFrom) url.searchParams.append("date_from", dateFrom);
+      if (dateTo) url.searchParams.append("date_to", dateTo);
+      url.searchParams.append("page", currentPage.toString());
+      url.searchParams.append("per_page", "10");
+
+      const [res] = await Promise.all([fetch(url.toString(), { method: "GET" }), minDelay]);
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const list = data.data ?? [];
+        setReceipts(Array.isArray(list) ? list : []);
+
+        const pag = data.pagination;
+        if (pag) {
+          setPaginationMeta({
+            current_page: pag.current_page ?? 1,
+            last_page: pag.last_page ?? 1,
+            per_page: pag.per_page ?? 10,
+            total: pag.total ?? 0,
+            from: pag.from ?? 0,
+            to: pag.to ?? 0,
+          });
+        } else {
+          setPaginationMeta(null);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching receipts:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [query, voucherNo, typeFilter, dateFrom, dateTo, currentPage]);
+
+  useEffect(() => {
+    fetchReceipts();
+  }, [fetchReceipts]);
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
+    setDeleteTarget(null);
+    setIsDeleting(true);
+    setShowDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/accountant/saved-receipts/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await fetchReceipts();
+        showToast("Receipt Deleted", "The receipt has been deleted.", "success");
+      } else {
+        showToast("Failed", data.message || "Could not delete receipt.", "error");
+      }
+    } catch {
+      showToast("Failed", "Please try again later.", "error");
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteLoading(false);
+    }
+  }
+
+  function getFileSrc(receipt: SavedReceipt): string {
+    const fileUrl = receipt.file_url;
+    if (fileUrl && (fileUrl.startsWith("http://") || fileUrl.startsWith("https://"))) {
+      return fileUrl;
+    }
+    return `/api/accountant/saved-receipts/${receipt.id}/file`;
+  }
+
+  const [previewFile, setPreviewFile] = useState<ViewImagePanelFile | null>(null);
+
+  function openPreview(receipt: SavedReceipt) {
+    setPreviewReceipt(receipt);
+    setPreviewFile({
+      name: receipt.display_name ?? receipt.file_name,
+      src: getFileSrc(receipt),
+      type: receipt.file_type,
+      size: receipt.file_size ?? undefined,
+    });
+  }
+
+  useEffect(() => {
+    if (!previewReceipt) setPreviewFile(null);
+  }, [previewReceipt]);
+
+  const RECEIPT_COLUMNS: DataTableColumn<SavedReceipt>[] = [
+    {
+      key: "avatar",
+      label: "",
+      width: "56px",
+      renderCell: (row) => (
+        <div
+          className="w-9 h-9 rounded-md flex items-center justify-center"
+          style={{ background: ACCENT }}
+        >
+          <FileText className="w-4 h-4 text-white" />
+        </div>
+      ),
+    },
+    {
+      key: "display_name",
+      label: "Receipt",
+      flex: true,
+      renderCell: (row) => (
+        <div>
+          <div className="font-semibold text-base text-neutral-900">
+            {row.display_name ?? row.file_name}
+          </div>
+          {row.transaction?.from_owner || row.transaction?.to_owner ? (
+            <div className="text-xs text-neutral-400 mt-0.5 truncate">
+              {row.transaction.from_owner?.name ?? "—"} → {row.transaction.to_owner?.name ?? "—"}
+            </div>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      key: "transaction_type",
+      label: "Type",
+      width: "120px",
+      renderCell: (row) => transactionTypeBadge(row.transaction_type),
+    },
+    {
+      key: "amount",
+      label: "Amount",
+      width: "120px",
+      renderCell: (row) =>
+        row.transaction?.amount ? formatCurrency(row.transaction.amount) : "—",
+    },
+    {
+      key: "created_at",
+      label: "Date",
+      width: "110px",
+      renderCell: (row) => formatDate(row.created_at),
+    },
+    {
+      key: "actions",
+      label: "",
+      width: "140px",
+      align: "right",
+      renderCell: (row) => (
+        <div className="flex items-center gap-2 justify-end">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              openPreview(row);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-opacity active:scale-95"
+            style={{ background: ACCENT, height: 30 }}
+          >
+            <Icons.Eye />
+            View
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(row);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors active:scale-95"
+            style={{ height: 30 }}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <MaintenancePageLayout
-      header={{
-        icon: Receipt,
-        title: "Transaction Receipts",
-        subtitle: "Search and view saved transaction receipts",
-      }}
-    >
-      <div className="flex-1 min-h-0 flex flex-col">
-        <div className="sticky top-0 z-20 bg-gray-50 shrink-0 pb-6 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)]">
-          <div className="px-4 sm:px-6 lg:px-8 mt-6">
-            <MaintenanceFilterCard
-              title="Filters"
-              description="Apply filters to search receipts"
-              hasFilters={hasFilters}
-              onReset={handleResetFilters}
-              filtersOpen={filtersOpen}
-              onToggleFilters={() => setFiltersOpen(!filtersOpen)}
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                <div className="flex flex-col">
-                  <OwnerSearchableDropdown
-                    label="Owner"
-                    required={false}
-                    placeholder="Search owner..."
-                    value={filters.owner_id}
-                    searchQuery={ownerSearchQuery}
-                    owners={owners}
-                    filteredOwners={filteredOwners}
-                    loading={loadingOwners}
-                    onSelect={(id) => {
-                      setFilters((prev) => ({ ...prev, owner_id: id }));
-                      setCurrentPage(1);
-                    }}
-                    onClear={() => {
-                      setFilters((prev) => ({ ...prev, owner_id: null, owner_name: "" }));
-                      setOwnerSearchQuery("");
-                      setCurrentPage(1);
-                    }}
-                    onSearchChange={setOwnerSearchQuery}
-                    onShowDropdown={setShowOwnerDropdown}
-                    showDropdown={showOwnerDropdown}
-                    emptyMessage="No owners found"
-                    noResultsMessage="No owners found"
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <label className="block text-sm font-medium mb-2 text-gray-900">Voucher Number</label>
-                  <input
-                    type="text"
-                    placeholder="Enter voucher..."
-                    value={debouncedVoucher}
-                    onChange={(e) => setDebouncedVoucher(e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <label className="block text-sm font-medium mb-2 text-gray-900">Transaction Type</label>
-                  <select
-                    value={filters.transaction_type}
-                    onChange={(e) => {
-                      setFilters((prev) => ({ ...prev, transaction_type: e.target.value as SearchFilters["transaction_type"] }));
-                      setCurrentPage(1);
-                    }}
-                    className={inputClass}
-                  >
-                    <option value="ALL">All</option>
-                    <option value="DEPOSIT">Deposit</option>
-                    <option value="WITHDRAWAL">Withdrawal</option>
-                  </select>
-                </div>
-                <div className="flex flex-col">
-                  <label className="block text-sm font-medium mb-2 text-gray-900">Date From</label>
-                  <input
-                    type="date"
-                    value={filters.date_from}
-                    onChange={(e) => setFilters((prev) => ({ ...prev, date_from: e.target.value }))}
-                    className={inputClass}
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <label className="block text-sm font-medium mb-2 text-gray-900">Date To</label>
-                  <input
-                    type="date"
-                    value={filters.date_to}
-                    min={filters.date_from || undefined}
-                    onChange={(e) => setFilters((prev) => ({ ...prev, date_to: e.target.value }))}
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-            </MaintenanceFilterCard>
-          </div>
-        </div>
+    <div className="min-h-full flex flex-col">
+      <AppHeader
+        navigation={superAdminNav}
+        subtitle="View and manage saved transaction receipts"
+      />
+      <ReceiptStatsBar />
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 lg:px-8 mt-6 pb-6">
-          <MaintenanceSectionCard>
-            <div className="p-6">
-            {loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                <ReceiptCardSkeleton count={perPage} />
-              </div>
-            ) : receipts.length > 0 ? (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {receipts.map((receipt) => (
-                    <div
-                      key={receipt.id}
-                      onClick={() => {
-                        setPanelClosing(false);
-                        setSelectedReceipt(receipt);
-                      }}
-                      className="group rounded-2xl border border-[#7B0F2B]/40 bg-white overflow-hidden cursor-pointer 
-                                hover:shadow-xl hover:border-[#7B0F2B] hover:-translate-y-0.5 
-                                transition-all duration-200"
-                    >
-                      {/* Image Section */}
-                      <div className="relative h-52 bg-gray-50 border-b border-[#7B0F2B]/20 overflow-hidden">
-                        {receipt.file_url ? (
-                          <img
-                            src={receipt.file_url}
-                            alt=""
-                            className="w-full h-full object-cover scale-105 group-hover:scale-110 transition-transform duration-300"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full">
-                            <FileText className="w-12 h-12 text-gray-400" />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Bottom Content */}
-                      <div className="bg-[#7B0F2B] p-4 text-white">
-                        <p className="text-sm font-semibold truncate">
-                          {receipt.display_name || "No Name"}
-                        </p>
-
-                        {receipt.transaction && (
-                          <p className="text-lg font-bold mt-1">
-                            {formatAmount(receipt.transaction.amount)}
-                          </p>
-                        )}
-
-                        <div className="mt-3 text-xs text-white/90 flex items-center justify-between">
-                          <span>{formatDate(receipt.created_at)}</span>
-                          <span className="font-medium opacity-0 group-hover:opacity-100 transition">
-                            Click to view
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {pagination && pagination.last_page > 1 && (
-                  <MaintenancePagination
-                    paginationMeta={{
-                      ...pagination,
-                      from: pagination.from ?? 0,
-                      to: pagination.to ?? 0,
-                    }}
-                    currentPage={currentPage}
-                    setCurrentPage={setCurrentPage}
-                    itemName="receipts"
-                    variant="simple"
-                  />
-                )}
-              </>
-            ) : hasFilters ? (
-              <MaintenanceEmptyState
-                icon={Search}
-                title="No receipts found"
-                description="No receipts match your current filters. Try adjusting your search criteria."
-              />
-            ) : (
-              <MaintenanceEmptyState
-                icon={Receipt}
-                title="No filters applied"
-                description="Apply filters above to search for transaction receipts. Filter by owner, voucher number, date range, or transaction type."
-              />
-            )}
+      <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8">
+        <section
+          className="rounded-md bg-white p-5 shadow-sm border"
+          style={{ borderColor: BORDER }}
+        >
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-[#5f0c18]">Transaction Receipts</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                View and manage saved transaction receipts
+              </p>
             </div>
-          </MaintenanceSectionCard>
-        </div>
+          </div>
+
+          <SharedToolbar
+            searchQuery={query}
+            onSearchChange={(val) => setQuery(val)}
+            searchPlaceholder="Search by owner name..."
+            statusFilter={typeFilter}
+            onStatusChange={(val) => {
+              setTypeFilter(val);
+              setCurrentPage(1);
+            }}
+            onRefresh={fetchReceipts}
+            statusOptions={TRANSACTION_TYPE_OPTIONS}
+          >
+            <input
+              type="text"
+              value={voucherNo}
+              onChange={(e) => setVoucherNo(e.target.value)}
+              placeholder="Voucher #"
+              className="h-10 rounded-lg border border-gray-300 text-sm px-3 text-gray-700 bg-white focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none shrink-0 w-32"
+            />
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="h-10 rounded-lg border border-gray-300 text-sm px-3 text-gray-700 bg-white focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none shrink-0"
+              placeholder="From"
+            />
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="h-10 rounded-lg border border-gray-300 text-sm px-3 text-gray-700 bg-white focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none shrink-0"
+              placeholder="To"
+            />
+          </SharedToolbar>
+
+          <div className="mt-4">
+            <DataTable<SavedReceipt>
+              columns={RECEIPT_COLUMNS}
+              rows={receipts}
+              loading={isLoading}
+              skeletonCount={6}
+              emptyTitle="No receipts found"
+              emptyDescription="Adjust your search or date filters."
+              onRowClick={(row) => openPreview(row)}
+              pagination={paginationMeta}
+              onPageChange={(page) => setCurrentPage(page)}
+              itemName="receipts"
+            />
+          </div>
+        </section>
       </div>
 
-      <ImagePreviewPanel
-        open={selectedReceipt !== null}
-        closing={panelClosing}
-        onClose={() => {
-          setPanelClosing(true);
-          setTimeout(() => {
-            setSelectedReceipt(null);
-            setPanelClosing(false);
-          }, 350);
-        }}
-        imageUrl={null}
-        imageName={selectedReceipt?.display_name || ""}
-        isVoucher={false}
-        loading={false}
-        error={null}
-        fileType={selectedReceipt?.file_type || null}
-        attachmentUrl={selectedReceipt?.file_url || null}
+      <ViewImagePanel
+        open={!!previewReceipt}
+        file={previewFile}
+        onClose={() => setPreviewReceipt(null)}
+        zIndex={70}
       />
-    </MaintenancePageLayout>
+
+      <ConfirmationModal
+        open={!!deleteTarget}
+        icon={Trash2}
+        color="#dc2626"
+        title="Delete Receipt"
+        message={
+          <>
+            Are you sure you want to delete this receipt?{" "}
+            <strong>{deleteTarget?.display_name ?? deleteTarget?.file_name}</strong> will be
+            permanently removed.
+          </>
+        }
+        confirmLabel="Delete"
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        isConfirming={isDeleting}
+      />
+
+      <LoadingModal
+        isOpen={showDeleteLoading}
+        title="Deleting Receipt"
+        message="Please wait..."
+      />
+    </div>
   );
 }

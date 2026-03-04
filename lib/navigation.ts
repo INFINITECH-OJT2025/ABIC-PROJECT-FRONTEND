@@ -23,6 +23,8 @@ import {
     Wrench,
     Banknote,
     Building2,
+    Ticket,
+    BanknoteArrowDown,
 } from "lucide-react"
 import type { NavEntry } from "@/components/app/AppSidebar"
 
@@ -75,23 +77,23 @@ export const superAdminNav: NavEntry[] = [
     { type: "section", label: "Accountant" },
     { type: "link", label: "ACCOUNTANT PANEL", href: "/super/accountant", icon: LayoutDashboard, exact: true },
         {
-        type: "group", label: "VOUCHERS", icon: FileText, items: [
-            { label: "Cash", href: "/super/accountant/vouchers/cash", icon: Plus },
-            { label: "Cheque", href: "/super/accountant/vouchers/cheque", icon: Receipt },
-            { label: "Cash List", href: "/super/accountant/vouchers/cash-list", icon: ScrollText },
-            { label: "Cheque List", href: "/super/accountant/vouchers/cheque-list", icon: ScrollText },
+        type: "group", label: "VOUCHERS", icon: Banknote, items: [
+            { label: "Cash Voucher", href: "cash-voucher", icon: Plus },
+            { label: "Cheque Voucher", href: "cheque-voucher", icon: Plus },
+            { label: "Cash Vouchers List", href: "cash-voucher-list", icon: ScrollText },
+            { label: "Cheque Vouchers List", href: "cheque-voucher-list", icon: ScrollText },
         ],
     },  
     {
         type: "group", label: "TRANSACTIONS", icon: FileText, items: [
             { label: "New Transaction", href: "/super/accountant/transactions", icon: Plus },
-            { label: "Transactions Receipt", href: "/super/accountant/saved-receipts", icon: Receipt },
+            { label: "Transactions Receipt", href: "/super/accountant/transaction-receipt", icon: Receipt },
         ],
     },
     {
         type: "group", label: "LEDGER", icon: BookMarked, items: [
-            { label: "Mains Ledger", href: "/super/accountant/ledger/mains", icon: BookOpen },
-            { label: "Client Ledger", href: "/super/accountant/ledger/clients", icon: BookOpen },
+            { label: "Main Ledger", href: "/super/accountant/ledger/main", icon: BookOpen },
+            { label: "Client Ledger", href: "/super/accountant/ledger/client", icon: BookOpen },
             { label: "Company Ledger", href: "/super/accountant/ledger/company", icon: BookOpen },
             { label: "System Ledger", href: "/super/accountant/ledger/system", icon: BookOpen },
         ],
@@ -141,14 +143,14 @@ export const accountantNav: NavEntry[] = [
     {
         type: "group", label: "TRANSACTIONS", icon: FileText, items: [
             { label: "New Transaction", href: "/accountant/transactions", icon: Plus },
-            { label: "Transactions Receipt", href: "/accountant/saved-receipts", icon: Receipt },
+            { label: "Transactions Receipt", href: "/accountant/transaction-receipt", icon: Receipt },
             { label: "Accountant Log", href: "/accountant/activity-log", icon: ScrollText },
         ],
     },
     {
         type: "group", label: "LEDGER", icon: BookMarked, items: [
-            { label: "Mains Ledger", href: "/accountant/ledger/mains", icon: BookOpen },
-            { label: "Client Ledger", href: "/accountant/ledger/clients", icon: BookOpen },
+            { label: "Main Ledger", href: "/accountant/ledger/main", icon: BookOpen },
+            { label: "Client Ledger", href: "/accountant/ledger/client", icon: BookOpen },
             { label: "System Ledger", href: "/accountant/ledger/system", icon: BookOpen },
         ],
     },
@@ -212,14 +214,14 @@ export const viewerNav: NavEntry[] = [
     {
         type: "group", label: "TRANSACTIONS", icon: FileText, items: [
             { label: "New Transaction", href: "/viewer/accountant/transactions", icon: Plus },
-            { label: "Transactions Receipt", href: "/viewer/accountant/saved-receipts", icon: Receipt },
+            { label: "Transactions Receipt", href: "/viewer/accountant/transaction-receipt", icon: Receipt },
             { label: "Accountant Log", href: "/viewer/accountant/activity-log", icon: ScrollText },
         ],
     },
     {
         type: "group", label: "LEDGER", icon: BookMarked, items: [
-            { label: "Mains Ledger", href: "/viewer/accountant/ledger/mains", icon: BookOpen },
-            { label: "Client Ledger", href: "/viewer/accountant/ledger/clients", icon: BookOpen },
+            { label: "Main Ledger", href: "/viewer/accountant/ledger/main", icon: BookOpen },
+            { label: "Client Ledger", href: "/viewer/accountant/ledger/client", icon: BookOpen },
             { label: "Company Ledger", href: "/viewer/accountant/ledger/company", icon: BookOpen },
             { label: "System Ledger", href: "/viewer/accountant/ledger/system", icon: BookOpen },
         ],

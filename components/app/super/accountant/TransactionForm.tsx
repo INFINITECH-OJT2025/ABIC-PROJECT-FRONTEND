@@ -1,6 +1,9 @@
 "use client";
 // ─── ViewImagePanel import ───────────────────────────────────────────────────
 import ViewImagePanelComponent, { ViewImagePanelFile } from "@/components/app/ViewImagePanel";
+import ConfirmationModal from "@/components/app/ConfirmationModal";
+import LoadingModal from "@/components/app/LoadingModal";
+import { useAppToast } from "@/components/app/toast/AppToastProvider";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
@@ -27,6 +30,7 @@ import {
     AlertCircle,
     Info,
     Plus,
+    SendHorizonal,
 } from "lucide-react";
 import FormTooltipError from "@/components/ui/form-tooltip-error";
 import OwnerCreateEditPanel from "@/components/app/super/accountant/OwnerCreateEditPanel";
@@ -90,6 +94,37 @@ function formatFileSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// ─── Helper: format date for display ─────────────────────────────────────────
+function formatDate(dateStr: string | null | undefined): string {
+    if (!dateStr) return "—";
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "—";
+        return d.toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" });
+    } catch {
+        return "—";
+    }
+}
+
+// ─── Helper: transaction type label ──────────────────────────────────────────
+function getTransactionTypeLabel(t: string): string {
+    const labels: Record<string, string> = {
+        "CASH DEPOSIT": "Cash Deposit",
+        "BANK TRANSFER": "Bank Transfer",
+        "CHEQUE": "Cheque",
+        "CHEQUE DEPOSIT": "Cheque Deposit",
+    };
+    return labels[t] ?? t;
+}
+
+// ─── Helper: format amount for display ───────────────────────────────────────
+function formatAmountDisplay(amount: string): string {
+    if (!amount) return "₱0.00";
+    const n = parseFloat(amount.replace(/,/g, ""));
+    if (isNaN(n)) return "₱0.00";
+    return `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 // ─── Helper: currency format ──────────────────────────────────────────────────
@@ -455,6 +490,9 @@ export interface TransactionFormProps {
 }
 
 export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange }: TransactionFormProps) {
+    // ── Toast ─────────────────────────────────────────────────────────────────
+    const { showToast } = useAppToast();
+
     // ── Top-level mode ────────────────────────────────────────────────────────
     const [mode, setMode] = useState<TransactionMode>(initialMode);
     const [voucherMode, setVoucherMode] = useState<VoucherMode>("WITH_VOUCHER");
@@ -503,6 +541,10 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
 
     // ── Preview panel ─────────────────────────────────────────────────────────
     const [previewFile, setPreviewFile] = useState<ViewImagePanelFile | null>(null);
+
+    // ── Confirmation / Loading modal ──────────────────────────────────────────
+    const [showConfirm, setShowConfirm] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // ── Validation errors ─────────────────────────────────────────────────────
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -588,8 +630,20 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
         fetch(`/api/accountant/ledger/mains?owner_id=${selectedMainOwner.id}`)
             .then((r) => r.json())
             .then((data) => {
-                const balance = data.data?.running_balance ?? data.running_balance ?? null;
-                setMainOwnerBalance(typeof balance === "number" ? balance : null);
+                // Backend returns: { data: { transactions: [...sorted desc...], openingBalance, owner } }
+                // The running_balance for the owner is the outsBalance from the first item
+                // when sorted descending (i.e. the most recent entry).
+                if (!data.success) {
+                    setMainOwnerBalance(null);
+                    return;
+                }
+                const transactions: { outsBalance?: number }[] = data.data?.transactions ?? [];
+                // The API defaults to sort=newest (desc), so transactions[0] is the latest entry.
+                // If there are no transactions yet, the balance is 0 (not unavailable).
+                const latestBalance = transactions.length > 0
+                    ? (transactions[0].outsBalance ?? 0)
+                    : 0;
+                setMainOwnerBalance(latestBalance);
             })
             .catch(() => setMainOwnerBalance(null))
             .finally(() => setBalanceLoading(false));
@@ -666,6 +720,152 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
         document.addEventListener("mousedown", handle);
         return () => document.removeEventListener("mousedown", handle);
     }, []);
+
+    // ─── Validation & Submission ──────────────────────────────────────────────
+
+    function validateForm() {
+        const newErrors: Record<string, string> = {};
+
+        if (voucherMode === "WITH_VOUCHER") {
+            if (!formData.voucher_date) newErrors.voucher_date = "Voucher date is required.";
+            if (!voucherFile) newErrors.voucherFile = "Voucher file is required.";
+        }
+
+        if (!formData.transaction_type) {
+            newErrors.transaction_type = "Transaction type is required.";
+        }
+
+        if (requiresFileUpload && uploadedFiles.length === 0) {
+            newErrors.uploadedFiles = "At least one cheque file is required.";
+        }
+
+        if (!formData.from_owner_id) {
+            newErrors.from_owner_id = "Main owner is required.";
+        }
+
+        if (!formData.to_owner_id) {
+            newErrors.to_owner_id = "Owner is required.";
+        }
+
+        if (showUnitSection && saveToUnitLedger && !formData.unit_id) {
+            newErrors.unit_id = "Unit is required when saving to unit ledger.";
+        }
+
+        const amt = parseFloat(formData.amount.replace(/,/g, ""));
+        if (!formData.amount || isNaN(amt) || amt <= 0) {
+            newErrors.amount = "A valid amount greater than 0 is required.";
+        }
+
+        if (!formData.particulars || !formData.particulars.trim()) {
+            newErrors.particulars = "Particulars are required.";
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    }
+
+    function handleSubmit() {
+        if (!validateForm()) {
+            return;
+        }
+        // Open confirmation modal — actual submission happens in handleConfirmSubmit
+        setShowConfirm(true);
+    }
+
+    async function handleConfirmSubmit() {
+        setShowConfirm(false);
+        setIsSubmitting(true);
+        try {
+            const transactionPayload = {
+                trans_type: formData.transaction_type,
+                from_owner_id: formData.from_owner_id,
+                to_owner_id: formData.to_owner_id,
+                unit_id: formData.unit_id ?? null,
+                amount: formData.amount.replace(/,/g, ""),
+                particulars: formData.particulars,
+                fund_reference: formData.fund_reference || null,
+                person_in_charge: formData.person_in_charge || null,
+                voucher_no: voucherMode === "WITH_VOUCHER" && voucherFile
+                    ? voucherFile.name.replace(/\.[^.]+$/, "").toUpperCase()
+                    : null,
+                voucher_date: voucherMode === "WITH_VOUCHER" ? formData.voucher_date || null : null,
+                save_to_unit_ledger: saveToUnitLedger,
+            };
+
+            // Build instruments array (e.g. for CHEQUE)
+            const instruments = uploadedFiles.map((f) => ({
+                instrument_type: formData.transaction_type,
+                instrument_no: f.name.replace(/\.[^.]+$/, ""),
+            }));
+
+            const body = new FormData();
+            body.append("transaction", JSON.stringify(transactionPayload));
+            if (instruments.length > 0) {
+                body.append("instruments", JSON.stringify(instruments));
+            }
+
+            // Voucher file
+            if (voucherMode === "WITH_VOUCHER" && voucherFile) {
+                body.append("voucher", voucherFile.file);
+            }
+
+            // Attachment files (cheque files etc.)
+            uploadedFiles.forEach((f, idx) => {
+                body.append(`file_${idx}`, f.file);
+            });
+
+            const endpoint = mode === "DEPOSIT"
+                ? "/api/head/accountant/transactions/deposit"
+                : "/api/head/accountant/transactions/withdrawal";
+
+            const res = await fetch(endpoint, { method: "POST", body });
+            const data = await res.json().catch(() => ({}));
+
+            if (res.ok && data.success) {
+                showToast(
+                    mode === "DEPOSIT" ? "Deposit Submitted" : "Withdrawal Submitted",
+                    data.message ?? "Transaction recorded successfully.",
+                    "success"
+                );
+                handleReset();
+            } else {
+                // Surface first validation error if available
+                const firstError = data.errors
+                    ? Object.values(data.errors as Record<string, string[]>).flat()[0]
+                    : undefined;
+                showToast(
+                    "Submission Failed",
+                    firstError ?? data.message ?? "Could not submit the transaction. Please try again.",
+                    "error"
+                );
+            }
+        } catch {
+            showToast("Submission Failed", "An unexpected error occurred. Please try again.", "error");
+        } finally {
+            setIsSubmitting(false);
+        }
+    }
+
+    function handleReset() {
+        setFormData({
+            transaction_type: mode === "DEPOSIT" ? "CASH DEPOSIT" : "CHEQUE",
+            from_owner_id: null,
+            to_owner_id: null,
+            unit_id: null,
+            amount: "",
+            particulars: "",
+            fund_reference: "",
+            person_in_charge: "",
+            voucher_date: "",
+        });
+        setSelectedMainOwner(null);
+        setSelectedToOwner(null);
+        setSelectedUnit(null);
+        setVoucherFile(null);
+        setUploadedFiles([]);
+        setErrors({});
+        setSaveToUnitLedger(false);
+    }
 
     // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -784,7 +984,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                         {/* Cheque upload — only for CHEQUE */}
                         {requiresFileUpload && (
                             <FileDropZone
-                                label="Cheque Files * (instrument # derived from file name)"
+                                label="Cheque Upload"
                                 files={uploadedFiles}
                                 onAdd={addFiles}
                                 onRemove={removeFile}
@@ -814,30 +1014,46 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
 
                         {/* Balance info / warning */}
                         {mode === "WITHDRAWAL" && selectedMainOwner && (
-                            <div className={`flex items-start gap-3 rounded-lg px-4 py-3 text-sm ${showBalanceWarning ? "bg-red-50 border border-red-200" : "bg-blue-50 border border-blue-200"
+                            <div className={`flex items-start gap-4 rounded-xl px-4 py-4 text-sm mt-3 shadow-sm border ${balanceLoading
+                                ? "bg-slate-50 border-slate-200 border-l-[6px] border-l-slate-400"
+                                : showBalanceWarning
+                                    ? "bg-red-50 border-red-200 border-l-[6px] border-l-red-500"
+                                    : "bg-blue-50 border-blue-200 border-l-[6px] border-l-blue-500"
                                 }`}>
-                                {showBalanceWarning
-                                    ? <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                                    : <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />}
-                                <div>
+                                {balanceLoading ? (
+                                    <div className="w-5 h-5 rounded-full border-2 border-slate-400 border-t-transparent animate-spin flex-shrink-0 mt-0.5" />
+                                ) : showBalanceWarning ? (
+                                    <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                                ) : (
+                                    <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                                )}
+                                <div className="flex-1">
                                     {balanceLoading ? (
-                                        <span className="text-gray-500">Fetching balance…</span>
+                                        <span className="text-slate-600 font-medium">Fetching balance…</span>
                                     ) : mainOwnerBalance !== null ? (
-                                        <>
-                                            <span className={showBalanceWarning ? "text-red-700 font-semibold" : "text-blue-700"}>
-                                                Current balance: <strong>₱{mainOwnerBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</strong>
-                                            </span>
+                                        <div className="space-y-1.5">
+                                            <div className={showBalanceWarning ? "text-red-800 font-medium" : "text-blue-900 font-medium"}>
+                                                Current balance:{" "}
+                                                <strong className={showBalanceWarning ? "text-red-700 text-base" : "text-blue-700 text-base"}>
+                                                    ₱{mainOwnerBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                                                </strong>
+                                            </div>
                                             {amountNum > 0 && (
-                                                <span className="block text-xs mt-0.5 text-gray-500">
-                                                    Projected after withdrawal: <strong className={showBalanceWarning ? "text-red-600" : "text-gray-700"}>₱{projectedBalance!.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</strong>
-                                                </span>
+                                                <div className="text-xs text-gray-600">
+                                                    Projected after withdrawal:{" "}
+                                                    <strong className={showBalanceWarning ? "text-red-600" : "text-blue-700"}>
+                                                        ₱{projectedBalance!.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                                                    </strong>
+                                                </div>
                                             )}
                                             {showBalanceWarning && (
-                                                <span className="block text-xs mt-1 font-semibold text-red-600">⚠ Insufficient balance.</span>
+                                                <div className="text-xs pt-1 font-bold text-red-600 uppercase tracking-wider flex items-center gap-1.5 mt-1 border-t border-red-200/50">
+                                                    ⚠ Insufficient balance — withdrawal exceeds available funds.
+                                                </div>
                                             )}
-                                        </>
+                                        </div>
                                     ) : (
-                                        <span className="text-blue-700">Balance unavailable for this owner.</span>
+                                        <span className="text-slate-600 font-medium">Balance unavailable for this owner.</span>
                                     )}
                                 </div>
                             </div>
@@ -1002,6 +1218,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                         >
                             <input
                                 type="text"
+                                maxLength={50}
                                 value={formData.fund_reference}
                                 onChange={(e) => {
                                     setFormData((p) => ({ ...p, fund_reference: e.target.value }));
@@ -1010,6 +1227,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                                 placeholder="Optional"
                                 className={inputCls(true, errors.fund_reference)}
                             />
+                            <span className="block text-right text-xs text-gray-400 mt-1">{formData.fund_reference.length}/50</span>
                         </InputField>
 
                         {/* Person in Charge */}
@@ -1021,6 +1239,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                         >
                             <input
                                 type="text"
+                                maxLength={100}
                                 value={formData.person_in_charge}
                                 onChange={(e) => {
                                     setFormData((p) => ({ ...p, person_in_charge: e.target.value }));
@@ -1029,6 +1248,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                                 placeholder="Optional"
                                 className={inputCls(true, errors.person_in_charge)}
                             />
+                            <span className="block text-right text-xs text-gray-400 mt-1">{formData.person_in_charge.length}/100</span>
                         </InputField>
                     </SectionCard>
 
@@ -1037,137 +1257,312 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                 {/* ── RIGHT: Attachments + Summary ── */}
                 <div className="flex flex-col gap-6 w-full h-full pb-8">
 
-                    {/* Attachments panel */}
-                    {shouldShowAttachments && (
-                        <div className="rounded-xl border bg-white shadow-sm overflow-hidden w-full" style={{ borderColor: "rgba(0,0,0,0.12)" }}>
-                            <div className="flex items-center gap-3 px-6 py-4 border-b bg-gray-50/60" style={{ borderColor: "rgba(0,0,0,0.12)" }}>
-                                <Paperclip className="w-4 h-4 text-[#7a0f1f]" />
-                                <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Uploaded Attachments</h3>
-                                <span className="ml-auto text-xs font-bold text-gray-400">
-                                    {(voucherFile && voucherMode === "WITH_VOUCHER" ? 1 : 0) + uploadedFiles.length} file(s)
+                    {/* Uploaded Attachments Section - Inspiration layout */}
+                    {shouldShowAttachments && (uploadedFiles.length > 0 || voucherFile) && (
+                        <div className="rounded-md border p-6 bg-white" style={{ borderColor: BORDER }}>
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-sm font-bold uppercase tracking-wide text-gray-600">
+                                    Uploaded Attachments
+                                </h3>
+                                <span className="text-xs text-gray-500">
+                                    {(uploadedFiles.length + (voucherFile ? 1 : 0))} file{(uploadedFiles.length + (voucherFile ? 1 : 0)) !== 1 ? "s" : ""}
                                 </span>
                             </div>
-                            <div className="px-6 py-5 space-y-3">
-                                {voucherFile && voucherMode === "WITH_VOUCHER" && (
-                                    <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-amber-200 bg-amber-50">
-                                        <FileText className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-0.5">Voucher</p>
-                                            <p className="text-sm font-medium text-gray-800 truncate">{voucherFile.name}</p>
+
+                            <div className="space-y-3">
+                                {/* Voucher File */}
+                                {voucherFile && (
+                                    <>
+                                        <div className="mb-2">
+                                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                                Voucher
+                                            </p>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setPreviewFile({ name: voucherFile.name, src: voucherFile.preview ?? voucherFile.file ? URL.createObjectURL(voucherFile.file) : "", type: voucherFile.file.type, size: voucherFile.size })}
-                                            className="text-gray-400 hover:text-blue-500 transition-colors p-1"
-                                            title="Preview"
-                                        >
-                                            <Eye className="w-4 h-4" />
-                                        </button>
-                                    </div>
+                                        <div className="rounded-md bg-white border shadow-sm p-4 hover:shadow-md transition-shadow" style={{ borderColor: BORDER }}>
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 rounded-md border overflow-hidden bg-gray-50 flex items-center justify-center shrink-0" style={{ borderColor: BORDER }}>
+                                                    {voucherFile.preview && voucherFile.preview.trim() !== "" ? (
+                                                        <img src={voucherFile.preview} alt="Voucher Preview" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <FileText className="w-6 h-6 text-gray-400" />
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-semibold text-neutral-900 truncate">{voucherFile.name.replace(/\.[^/.]+$/, "")}</div>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPreviewFile({ name: voucherFile.name, src: voucherFile.preview ?? (voucherFile.file ? URL.createObjectURL(voucherFile.file) : ""), type: voucherFile.file.type, size: voucherFile.size })}
+                                                        className="p-2 rounded-md hover:bg-gray-100 transition-colors"
+                                                        title="Preview"
+                                                    >
+                                                        <Eye className="w-4 h-4 text-gray-600" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setVoucherFile(null)}
+                                                        className="p-2 rounded-md hover:bg-red-50 transition-colors"
+                                                        title="Remove"
+                                                    >
+                                                        <Trash2 className="w-4 h-4 text-red-600" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </>
                                 )}
-                                {uploadedFiles.map((f) => (
-                                    <div key={f.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50">
-                                        {f.preview
-                                            ? <img src={f.preview} alt={f.name} className="w-9 h-9 rounded object-cover border border-gray-200 flex-shrink-0" />
-                                            : <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />}
-                                        <div className="flex-1 min-w-0">
-                                            {requiresFileUpload && (
-                                                <p className="text-[11px] font-semibold text-[#7a0f1f] uppercase tracking-wide mb-0.5">#{fileNameToInstrumentNo(f.name)}</p>
-                                            )}
-                                            <p className="text-sm font-medium text-gray-800 truncate">{f.name}</p>
-                                        </div>
-                                        <span className="text-xs text-gray-400 mr-1">{formatFileSize(f.size)}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => setPreviewFile({ name: f.name, src: f.preview ?? URL.createObjectURL(f.file), type: f.file.type, size: f.size })}
-                                            className="text-gray-400 hover:text-blue-500 transition-colors p-1"
-                                            title="Preview"
-                                        >
-                                            <Eye className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                ))}
+
+                                {/* Separator */}
+                                {voucherFile && uploadedFiles.length > 0 && (
+                                    <div className="my-4 border-t" style={{ borderColor: BORDER }}></div>
+                                )}
+
+                                {/* Payment Attachments */}
+                                {uploadedFiles.length > 0 && (
+                                    <>
+                                        {voucherFile && (
+                                            <div className="mb-2">
+                                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                                    Payment Attachments
+                                                </p>
+                                            </div>
+                                        )}
+                                        {uploadedFiles.map((f) => (
+                                            <div
+                                                key={f.id}
+                                                className="rounded-md bg-white border shadow-sm p-4 hover:shadow-md transition-shadow"
+                                                style={{ borderColor: BORDER }}
+                                            >
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-12 h-12 rounded-md border overflow-hidden bg-gray-50 flex items-center justify-center shrink-0" style={{ borderColor: BORDER }}>
+                                                        {f.preview && f.preview.trim() !== "" ? (
+                                                            <img src={f.preview} alt={`Preview ${f.name}`} className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <FileText className="w-6 h-6 text-gray-400" />
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        {requiresFileUpload && (
+                                                            <p className="text-[11px] font-semibold text-[#7a0f1f] uppercase tracking-wide mb-0.5">#{fileNameToInstrumentNo(f.name)}</p>
+                                                        )}
+                                                        <div className="font-semibold text-neutral-900 truncate">{f.name.replace(/\.[^/.]+$/, "")}</div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPreviewFile({ name: f.name, src: f.preview ?? URL.createObjectURL(f.file), type: f.file.type, size: f.size })}
+                                                            className="p-2 rounded-md hover:bg-gray-100 transition-colors"
+                                                            title="Preview"
+                                                        >
+                                                            <Eye className="w-4 h-4 text-gray-600" />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeFile(f.id)}
+                                                            className="p-2 rounded-md hover:bg-red-50 transition-colors"
+                                                            title="Remove"
+                                                        >
+                                                            <Trash2 className="w-4 h-4 text-red-600" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </>
+                                )}
                             </div>
                         </div>
                     )}
 
-                    {/* Summary panel */}
-                    <div className="rounded-xl border bg-white shadow-sm overflow-hidden w-full" style={{ borderColor: "rgba(0,0,0,0.12)" }}>
-                        {/* Header */}
-                        <div className="px-6 py-6 text-white" style={{ background: "linear-gradient(135deg, #7a0f1f, #a4163a)" }}>
-                            <p className="text-xs font-bold uppercase tracking-widest text-white/70 mb-2">Transaction Summary</p>
-                            <p className="text-3xl font-bold mb-3">
-                                ₱{amountNum > 0 ? amountNum.toLocaleString("en-PH", { minimumFractionDigits: 2 }) : "0.00"}
-                            </p>
-                            <div className="flex items-center gap-2">
-                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${mode === "DEPOSIT" ? "bg-green-500/20 text-green-200" : "bg-red-500/30 text-red-200"
-                                    }`}>
-                                    {mode === "DEPOSIT" ? <ArrowDownCircle className="w-3 h-3" /> : <ArrowUpCircle className="w-3 h-3" />}
-                                    {mode}
-                                </span>
-                                <span className="inline-block px-2 py-1 rounded-full text-xs font-bold bg-white/20 text-white/90">
-                                    {voucherMode === "WITH_VOUCHER" ? "With Voucher" : "No Voucher"}
-                                </span>
+                    {/* Transaction Summary - Original header, inspiration content layout */}
+                    <div className="rounded-lg border overflow-hidden shadow-lg bg-white w-full" style={{ borderColor: BORDER }}>
+                        <div className="lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto" style={{ scrollbarWidth: "thin", scrollbarColor: "#cbd5e1 #f1f1f1" }}>
+                            {/* Header - Original layout (amount, badges) */}
+                            <div className="px-6 py-6 text-white" style={{ background: "linear-gradient(135deg, #7a0f1f, #a4163a)" }}>
+                                <p className="text-xs font-bold uppercase tracking-widest text-white/70 mb-2">Transaction Summary</p>
+                                <p className="text-3xl font-bold mb-3">
+                                    ₱{amountNum > 0 ? amountNum.toLocaleString("en-PH", { minimumFractionDigits: 2 }) : "0.00"}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${mode === "DEPOSIT" ? "bg-green-500/20 text-green-200" : "bg-red-500/30 text-red-200"}`}>
+                                        {mode === "DEPOSIT" ? <ArrowDownCircle className="w-3 h-3" /> : <ArrowUpCircle className="w-3 h-3" />}
+                                        {mode}
+                                    </span>
+                                    <span className="inline-block px-2 py-1 rounded-full text-xs font-bold bg-white/20 text-white/90">
+                                        {voucherMode === "WITH_VOUCHER" ? "With Voucher" : "No Voucher"}
+                                    </span>
+                                </div>
                             </div>
-                        </div>
 
-                        {/* Details rows */}
-                        <div className="px-6 py-5 space-y-3 text-sm">
-                            {[
-                                {
-                                    label: "Transaction Type",
-                                    value: mode === "WITHDRAWAL" && formData.transaction_type === "CHEQUE" ? (
-                                        <div className="flex flex-col items-end gap-1 w-full">
-                                            <span>{formData.transaction_type || "—"}</span>
-                                            {uploadedFiles.length > 0 && (
-                                                <div className="flex flex-col items-end mt-0.5">
-                                                    {uploadedFiles.map(f => (
-                                                        <span key={f.id} className="text-[11px] text-gray-500 normal-case truncate max-w-[200px]" title={f.name}>
-                                                            {f.name}
-                                                        </span>
+                            {/* Content - Inspiration layout (bordered sections) */}
+                            <div className="bg-white p-6">
+                                <div className="space-y-4">
+                                    {/* Deposit/Withdrawal Type */}
+                                    <div className="pb-3 border-b" style={{ borderColor: BORDER }}>
+                                        <div className="flex items-start justify-between gap-2">
+                                            <span className="text-xs font-semibold text-gray-700 shrink-0">Type</span>
+                                            <span className="text-sm font-semibold text-gray-900 text-right break-words whitespace-normal min-w-0 max-w-[65%]">
+                                                {voucherMode === "WITH_VOUCHER" ? "With Voucher" : "No Voucher"}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Voucher Information */}
+                                    {voucherMode === "WITH_VOUCHER" && formData.voucher_date && (
+                                        <div className="space-y-2 pb-3 border-b" style={{ borderColor: BORDER }}>
+                                            <div className="flex items-start justify-between gap-2">
+                                                <span className="text-xs text-gray-600 shrink-0">Voucher Date</span>
+                                                <span className="text-sm font-medium text-gray-900 text-right break-words whitespace-normal min-w-0 max-w-[65%]">
+                                                    {formatDate(formData.voucher_date)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Transaction Type */}
+                                    <div className="pb-3 border-b" style={{ borderColor: BORDER }}>
+                                        <div className="flex items-start justify-between gap-2">
+                                            <span className="text-xs font-semibold text-gray-700 shrink-0">Transaction Type</span>
+                                            <span className="text-sm font-semibold text-gray-900 text-right break-words whitespace-normal min-w-0 max-w-[65%]">
+                                                {getTransactionTypeLabel(formData.transaction_type) || "—"}
+                                            </span>
+                                        </div>
+                                        {(formData.transaction_type === "CHEQUE" || formData.transaction_type === "CHEQUE DEPOSIT") && uploadedFiles.length > 0 && (
+                                            <div className="mt-2">
+                                                <div className="text-xs text-gray-600 mb-1">
+                                                    {formData.transaction_type === "CHEQUE" ? "Cheque Numbers" : "Deposit Slip Numbers"}
+                                                </div>
+                                                <div className="space-y-1">
+                                                    {uploadedFiles.map((f) => (
+                                                        <div key={f.id} className="text-sm font-medium text-gray-900 text-right break-words whitespace-normal min-w-0">
+                                                            {fileNameToInstrumentNo(f.name)}
+                                                        </div>
                                                     ))}
                                                 </div>
-                                            )}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Owners */}
+                                    <div className="space-y-2 pb-3 border-b" style={{ borderColor: BORDER }}>
+                                        <div className="flex items-start justify-between gap-2">
+                                            <span className="text-xs font-semibold text-gray-700 shrink-0">Main</span>
+                                            <span className="text-sm font-medium text-gray-900 text-right break-words whitespace-normal min-w-0 max-w-[65%]">
+                                                {selectedMainOwner?.name ?? "—"}
+                                            </span>
                                         </div>
-                                    ) : (formData.transaction_type || "—")
-                                },
-                                ...(voucherMode === "WITH_VOUCHER" ? [{ label: "Voucher Date", value: formData.voucher_date || "—" }] : []),
-                                ...(mode === "DEPOSIT" && voucherMode !== "NO_VOUCHER" ? [{ label: "Transaction Number", value: requiresFileUpload && uploadedFiles.length > 0 ? uploadedFiles.map((f) => fileNameToInstrumentNo(f.name)).join(", ") : "—" }] : []),
-                                { label: "Main Owner", value: selectedMainOwner?.name ?? "—" },
-                                { label: "Owner", value: selectedToOwner?.name ?? "—" },
-                                { label: "Unit", value: saveToUnitLedger && selectedUnit ? selectedUnit.unit_name : "—" },
-                                { label: "Particulars", value: formData.particulars || "—" },
-                                { label: "Fund Ref.", value: formData.fund_reference || "—" },
-                                { label: "PIC", value: formData.person_in_charge || "—" },
-                                { label: "Attachments", value: `${(voucherFile && voucherMode === "WITH_VOUCHER" ? 1 : 0) + uploadedFiles.length} file(s)` },
-                            ].map(({ label, value }) => (
-                                <div key={label} className="flex items-start justify-between gap-4">
-                                    <span className="text-gray-400 font-medium flex-shrink-0 w-32">{label}</span>
-                                    {typeof value === "string" ? (
-                                        <span className="text-gray-800 font-semibold text-right uppercase truncate flex-1 min-w-0" title={value}>{value}</span>
-                                    ) : (
-                                        <div className="text-gray-800 font-semibold text-right uppercase flex-1 min-w-0">{value}</div>
+                                        <div className="flex items-start justify-between gap-2">
+                                            <span className="text-xs font-semibold text-gray-700 shrink-0">Owner</span>
+                                            <span className="text-sm font-medium text-gray-900 text-right break-words whitespace-normal min-w-0 max-w-[65%]">
+                                                {selectedToOwner?.name ?? "—"}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Unit */}
+                                    {saveToUnitLedger && selectedUnit && (
+                                        <div className="pb-3 border-b" style={{ borderColor: BORDER }}>
+                                            <div className="flex items-start justify-between gap-2">
+                                                <span className="text-xs font-semibold text-gray-700 shrink-0">Unit</span>
+                                                <span className="text-sm font-medium text-gray-900 text-right break-words whitespace-normal min-w-0 max-w-[65%]">
+                                                    {selectedUnit.unit_name}
+                                                </span>
+                                            </div>
+                                        </div>
                                     )}
+
+                                    {/* Particulars */}
+                                    {formData.particulars && (
+                                        <div className="pb-3 border-b" style={{ borderColor: BORDER }}>
+                                            <div className="space-y-1">
+                                                <span className="text-xs font-semibold text-gray-700 block">Particulars</span>
+                                                <p className="text-sm text-gray-900 text-right break-words whitespace-pre-wrap leading-relaxed min-w-0">
+                                                    {formData.particulars}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Fund Reference */}
+                                    {formData.fund_reference && (
+                                        <div className="pb-3 border-b" style={{ borderColor: BORDER }}>
+                                            <div className="flex items-start justify-between gap-2">
+                                                <span className="text-xs font-semibold text-gray-700 shrink-0">Fund Reference</span>
+                                                <span className="text-sm font-medium text-gray-900 text-right break-words whitespace-normal min-w-0 max-w-[65%]">
+                                                    {formData.fund_reference}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Person in Charge */}
+                                    {formData.person_in_charge && (
+                                        <div className="pb-3 border-b" style={{ borderColor: BORDER }}>
+                                            <div className="flex items-start justify-between gap-2">
+                                                <span className="text-xs font-semibold text-gray-700 shrink-0">Person in Charge</span>
+                                                <span className="text-sm font-medium text-gray-900 text-right break-words whitespace-normal min-w-0 max-w-[65%]">
+                                                    {formData.person_in_charge}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Attachments */}
+                                    {(uploadedFiles.length > 0 || voucherFile) && (
+                                        <div className="pb-3 border-b" style={{ borderColor: BORDER }}>
+                                            <div className="flex items-start justify-between gap-2">
+                                                <span className="text-xs font-semibold text-gray-700 shrink-0">Attachments</span>
+                                                <span className="text-sm font-medium text-gray-900 text-right break-words whitespace-normal min-w-0 max-w-[65%]">
+                                                    {(uploadedFiles.length + (voucherFile ? 1 : 0))} file{(uploadedFiles.length + (voucherFile ? 1 : 0)) !== 1 ? "s" : ""}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Total Amount */}
+                                    <div className="pb-3">
+                                        <div className="bg-gray-100 rounded-md p-4">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <span className="text-sm font-bold text-gray-900 uppercase tracking-wide shrink-0">
+                                                    Total Amount
+                                                </span>
+                                                <span className="text-2xl font-bold text-right break-words whitespace-normal min-w-0 max-w-[65%]" style={{ color: "#4A081A" }}>
+                                                    {formatAmountDisplay(formData.amount)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
-
-                        {/* Balance warning */}
-                        {showBalanceWarning && (
-                            <div className="mx-6 mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 flex items-start gap-2">
-                                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                                <p className="text-xs text-red-700 font-medium">Balance will go negative after this withdrawal.</p>
                             </div>
-                        )}
 
-                        {/* Actions */}
-                        <div className="px-6 pb-6 pt-2 space-y-3">
-                            <button type="button" className="w-full h-11 rounded-lg font-semibold text-sm text-white shadow transition-opacity hover:opacity-90 active:scale-95" style={{ background: ACCENT }}>
-                                {mode === "DEPOSIT" ? "Submit Deposit" : "Submit Withdrawal"}
-                            </button>
-                            <button type="button" className="w-full h-10 rounded-lg text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors">
-                                Reset Form
-                            </button>
+                            {/* Balance warning */}
+                            {showBalanceWarning && (
+                                <div className="mx-6 mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-300 border-l-4 border-l-red-500 flex items-start gap-3 shadow-sm">
+                                    <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                                    <p className="text-sm text-red-800 font-semibold leading-relaxed">
+                                        This withdrawal will exceed the current available balance.
+                                        <span className="block text-xs font-normal text-red-700 mt-0.5">Please verify the amount before submitting.</span>
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Actions */}
+                            <div className="px-6 pb-6 pt-2 space-y-3">
+                                <button
+                                    type="button"
+                                    onClick={handleSubmit}
+                                    disabled={isSubmitting}
+                                    className="w-full h-11 rounded-lg font-semibold text-sm text-white shadow transition-opacity hover:opacity-90 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    style={{ background: ACCENT }}
+                                >
+                                    <SendHorizonal className="w-4 h-4" />
+                                    {mode === "DEPOSIT" ? "Submit Deposit" : "Submit Withdrawal"}
+                                </button>
+                                <button type="button" onClick={handleReset} className="w-full h-10 rounded-lg text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors">
+                                    Reset Form
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -1188,8 +1583,50 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                 unit={null}
                 defaultOwnerId={selectedToOwner?.id ?? null}
                 defaultName={createUnitName}
-                onClose={() => setShowUnitPanel(false)}
-                onSaved={() => { setShowUnitPanel(false); fetchUnits(); }}
+                onClose={() => { setShowUnitPanel(false); setCreateUnitName(""); }}
+                onSaved={(savedUnit) => {
+                    setShowUnitPanel(false);
+                    setCreateUnitName("");
+                    fetchUnits();
+                    if (savedUnit) {
+                        setSelectedUnit(savedUnit);
+                        setFormData((p) => ({ ...p, unit_id: savedUnit.id }));
+                        setUnitQuery("");
+                    }
+                }}
+            />
+
+            {/* ── Confirmation Modal ── */}
+            <ConfirmationModal
+                open={showConfirm}
+                icon={SendHorizonal}
+                color={ACCENT}
+                title={mode === "DEPOSIT" ? "Confirm Deposit" : "Confirm Withdrawal"}
+                message={
+                    <>
+                        Are you sure you want to submit this{" "}
+                        <strong>{mode === "DEPOSIT" ? "deposit" : "withdrawal"}</strong> of{" "}
+                        <strong>
+                            ₱{parseFloat(formData.amount.replace(/,/g, "") || "0").toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </strong>?
+                        <br />
+                        <span className="text-xs text-gray-500 mt-1 block">This action cannot be undone.</span>
+                    </>
+                }
+                confirmLabel={mode === "DEPOSIT" ? "Submit Deposit" : "Submit Withdrawal"}
+                cancelLabel="Go Back"
+                onCancel={() => setShowConfirm(false)}
+                onConfirm={handleConfirmSubmit}
+                isConfirming={isSubmitting}
+                zIndex={110}
+            />
+
+            {/* ── Loading Modal ── */}
+            <LoadingModal
+                isOpen={isSubmitting}
+                title={mode === "DEPOSIT" ? "Submitting Deposit" : "Submitting Withdrawal"}
+                message="Please wait while your transaction is being processed…"
+                zIndex={120}
             />
         </>
     );
