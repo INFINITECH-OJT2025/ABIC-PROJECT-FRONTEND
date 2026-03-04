@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +11,7 @@ import { Lock, Eye, EyeOff, CheckCircle2 } from "lucide-react"
 
 const PASSWORD_SYMBOLS = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { showToast } = useAppToast()
@@ -137,7 +137,7 @@ export default function ResetPasswordPage() {
     try {
       const res = await fetch("/api/auth/reset-password", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "X-Page-URL": typeof window !== 'undefined' ? window.location.href : '',
         },
@@ -284,8 +284,8 @@ export default function ResetPasswordPage() {
                     }}
                     disabled={loading}
                     className={`h-10 pl-10 pr-10 rounded-lg border-gray-300 text-gray-900 placeholder-gray-400 focus:border-[#7B0F2B] ${touched.password && getFieldError("password")
-                        ? "border-red-500"
-                        : ""
+                      ? "border-red-500"
+                      : ""
                       }`}
                   />
                   <button
@@ -419,9 +419,9 @@ export default function ResetPasswordPage() {
                     }}
                     disabled={loading}
                     className={`h-10 pl-10 pr-10 rounded-lg border-gray-300 text-gray-900 placeholder-gray-400 focus:border-[#7B0F2B] ${touched.password_confirmation &&
-                        getFieldError("password_confirmation")
-                        ? "border-red-500"
-                        : ""
+                      getFieldError("password_confirmation")
+                      ? "border-red-500"
+                      : ""
                       }`}
                   />
                   <button
@@ -488,5 +488,13 @@ export default function ResetPasswordPage() {
         darkMode={false}
       />
     </div>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50/50">Loading...</div>}>
+      <ResetPasswordContent />
+    </React.Suspense>
   )
 }

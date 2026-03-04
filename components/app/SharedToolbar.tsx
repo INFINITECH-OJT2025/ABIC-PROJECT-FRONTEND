@@ -17,8 +17,8 @@ const Icons = {
 };
 
 export interface SharedToolbarProps {
-    searchQuery: string;
-    onSearchChange: (query: string) => void;
+    searchQuery?: string;
+    onSearchChange?: (query: string) => void;
     searchPlaceholder?: string;
     statusFilter?: string;
     onStatusChange?: (status: string) => void;
@@ -41,7 +41,7 @@ export default function SharedToolbar({
         { label: "Inactive", value: "Inactive" },
         { label: "Suspended", value: "Suspended" },
     ],
-    containerMaxWidth = "max-w-xl",
+    containerMaxWidth = "w-1/2",
     children,
 }: SharedToolbarProps) {
     return (
@@ -72,18 +72,20 @@ export default function SharedToolbar({
                     </select>
                 )}
 
-                <div className="relative flex-1">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                        <Search className="h-4 w-4" />
+                {onSearchChange && (
+                    <div className="relative flex-1">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                            <Search className="h-4 w-4" />
+                        </div>
+                        <Input
+                            type="text"
+                            placeholder={searchPlaceholder}
+                            value={searchQuery ?? ""}
+                            onChange={(e) => onSearchChange(e.target.value)}
+                            className="w-full text-sm h-10 pl-10 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none"
+                        />
                     </div>
-                    <Input
-                        type="text"
-                        placeholder={searchPlaceholder}
-                        value={searchQuery}
-                        onChange={(e) => onSearchChange(e.target.value)}
-                        className="w-full text-sm h-10 pl-10 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none"
-                    />
-                </div>
+                )}
             </div>
         </div>
     );

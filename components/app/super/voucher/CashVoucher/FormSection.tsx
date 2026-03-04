@@ -7,13 +7,13 @@ import ConfirmationModal from "@/components/app/ConfirmationModal";
 interface FormSectionProps {
   formData: PrintableData;
   onInputChange: (field: keyof PrintableData, value: string) => void;
-  onClearForm?: () => void;
+  onSuccessClear?: () => void;
 }
 
 export default function FormSection({
   formData,
   onInputChange,
-  onClearForm,
+  onSuccessClear,
 }: FormSectionProps) {
   const [formError, setFormError] = useState<string | null>(null);
   const [recentVouchers, setRecentVouchers] = useState<PrintableData[]>([]);
@@ -224,6 +224,7 @@ export default function FormSection({
             <input
               type="text"
               value={formData.voucherNo ?? ""}
+              disabled
               onChange={(e) => onInputChange("voucherNo", e.target.value)}
               id="voucherNo"
               className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/20 focus:border-[#7a0f1f] disabled:opacity-60 transition-all"
@@ -477,7 +478,7 @@ export default function FormSection({
         </div>
 
         <div className="pt-4 w-full">
-          <DownloadButton formData={formData} onValidate={validateRequired} onSave={saveVoucherToDatabase} onSuccess={onClearForm} />
+          <DownloadButton formData={formData} onValidate={validateRequired} onSave={saveVoucherToDatabase} onSuccess={onSuccessClear} />
         </div>
       </form>
     </div>
