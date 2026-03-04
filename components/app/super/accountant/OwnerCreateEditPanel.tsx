@@ -42,6 +42,8 @@ export interface OwnerCreateEditPanelProps {
     onDeactivate?: (owner: Owner) => void;
     /** Called to restore an existing owner. */
     onRestore?: (owner: Owner) => void;
+    /** Pre-fill the name field in create mode (e.g. from a search query). */
+    defaultName?: string;
 }
 
 export default function OwnerCreateEditPanel({
@@ -50,7 +52,8 @@ export default function OwnerCreateEditPanel({
     onClose,
     onSaved,
     onDeactivate,
-    onRestore
+    onRestore,
+    defaultName,
 }: OwnerCreateEditPanelProps) {
     const { showToast } = useAppToast();
     const isEdit = !!owner;
@@ -185,7 +188,7 @@ export default function OwnerCreateEditPanel({
                 setOpeningDate("");
             } else {
                 setOwnerType("CLIENT");
-                setName("");
+                setName(defaultName ?? "");
                 setDescription("");
                 setEmail("");
                 setPhone("");
@@ -727,7 +730,7 @@ export default function OwnerCreateEditPanel({
                                                 Units Not Available
                                             </h4>
                                             <p className="text-sm text-blue-800">
-                                                {owner.owner_type === "MAIN" 
+                                                {owner.owner_type === "MAIN"
                                                     ? "Main owners cannot have units associated with their accounts. Only Client and Company owners can have units."
                                                     : "System owners cannot have units associated with their accounts. Only Client and Company owners can have units."}
                                             </p>
@@ -773,56 +776,56 @@ export default function OwnerCreateEditPanel({
                                             setUnitPanelOpen(true);
                                         }}
                                         columns={[
-                                        {
-                                            key: "avatar",
-                                            label: "",
-                                            width: "56px",
-                                            renderCell: (row) => (
-                                                <div className="w-9 h-9 rounded-md bg-[#7a0f1f] flex items-center justify-center flex-shrink-0">
-                                                    <span className="text-sm font-bold text-white">
-                                                        {row.unit_name?.charAt(0).toUpperCase() ?? "?"}
-                                                    </span>
-                                                </div>
-                                            ),
-                                        },
-                                        {
-                                            key: "unit_name",
-                                            label: "Unit Name",
-                                            sortable: true,
-                                            flex: true,
-                                            width: "50%",
-                                        },
-                                        {
-                                            key: "building",
-                                            label: "Property",
-                                            flex: true,
-                                            width: "50%",
-                                            renderCell: (row) => row.property?.name ?? <span className="text-gray-300">—</span>,
-                                        },
-                                        {
-                                            key: "status",
-                                            label: "Status",
-                                            width: "110px",
-                                            align: "center",
-                                            renderCell: (row) => {
-                                                const s = row.status?.toUpperCase();
-                                                const cfg: Record<string, { bg: string; text: string; label: string }> = {
-                                                    ACTIVE: { bg: "#dcfce7", text: "#166534", label: "Active" },
-                                                    INACTIVE: { bg: "#f1f5f9", text: "#475569", label: "Inactive" },
-                                                    SUSPENDED: { bg: "#fef9c3", text: "#854d0e", label: "Suspended" },
-                                                };
-                                                const c = cfg[s] ?? { bg: "#f1f5f9", text: "#475569", label: row.status };
-                                                return (
-                                                    <span
-                                                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
-                                                        style={{ background: c.bg, color: c.text }}
-                                                    >
-                                                        {c.label}
-                                                    </span>
-                                                );
+                                            {
+                                                key: "avatar",
+                                                label: "",
+                                                width: "56px",
+                                                renderCell: (row) => (
+                                                    <div className="w-9 h-9 rounded-md bg-[#7a0f1f] flex items-center justify-center flex-shrink-0">
+                                                        <span className="text-sm font-bold text-white">
+                                                            {row.unit_name?.charAt(0).toUpperCase() ?? "?"}
+                                                        </span>
+                                                    </div>
+                                                ),
                                             },
-                                        },
-                                    ]}
+                                            {
+                                                key: "unit_name",
+                                                label: "Unit Name",
+                                                sortable: true,
+                                                flex: true,
+                                                width: "50%",
+                                            },
+                                            {
+                                                key: "building",
+                                                label: "Property",
+                                                flex: true,
+                                                width: "50%",
+                                                renderCell: (row) => row.property?.name ?? <span className="text-gray-300">—</span>,
+                                            },
+                                            {
+                                                key: "status",
+                                                label: "Status",
+                                                width: "110px",
+                                                align: "center",
+                                                renderCell: (row) => {
+                                                    const s = row.status?.toUpperCase();
+                                                    const cfg: Record<string, { bg: string; text: string; label: string }> = {
+                                                        ACTIVE: { bg: "#dcfce7", text: "#166534", label: "Active" },
+                                                        INACTIVE: { bg: "#f1f5f9", text: "#475569", label: "Inactive" },
+                                                        SUSPENDED: { bg: "#fef9c3", text: "#854d0e", label: "Suspended" },
+                                                    };
+                                                    const c = cfg[s] ?? { bg: "#f1f5f9", text: "#475569", label: row.status };
+                                                    return (
+                                                        <span
+                                                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
+                                                            style={{ background: c.bg, color: c.text }}
+                                                        >
+                                                            {c.label}
+                                                        </span>
+                                                    );
+                                                },
+                                            },
+                                        ]}
                                     />
                                 </div>
                             )}
