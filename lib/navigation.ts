@@ -23,6 +23,8 @@ import {
     Wrench,
     Banknote,
     Building2,
+    Ticket,
+    BanknoteArrowDown,
 } from "lucide-react"
 import type { NavEntry } from "@/components/app/AppSidebar"
 
@@ -75,11 +77,11 @@ export const superAdminNav: NavEntry[] = [
     { type: "section", label: "Accountant" },
     { type: "link", label: "ACCOUNTANT PANEL", href: "/super/accountant", icon: LayoutDashboard, exact: true },
         {
-        type: "group", label: "VOUCHERS", icon: FileText, items: [
-            { label: "Cash", href: "/super/accountant/vouchers/cash", icon: Plus },
-            { label: "Cheque", href: "/super/accountant/vouchers/cheque", icon: Receipt },
-            { label: "Cash List", href: "/super/accountant/vouchers/cash-list", icon: ScrollText },
-            { label: "Cheque List", href: "/super/accountant/vouchers/cheque-list", icon: ScrollText },
+        type: "group", label: "VOUCHERS", icon: Banknote, items: [
+            { label: "Cash Voucher", href: "cash-voucher", icon: Plus },
+            { label: "Cheque Voucher", href: "cheque-voucher", icon: Plus },
+            { label: "Cash Vouchers List", href: "cash-voucher-list", icon: ScrollText },
+            { label: "Cheque Vouchers List", href: "cheque-voucher-list", icon: ScrollText },
         ],
     },  
     {
