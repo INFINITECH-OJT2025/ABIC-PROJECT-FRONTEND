@@ -3,6 +3,7 @@
  * Used by ReceiptGenerator, ReceiptPDF, and TransactionForm success flow.
  */
 export interface SuccessTransactionData {
+  id: number;
   voucherMode?: "WITH_VOUCHER" | "NO_VOUCHER";
   voucher_date?: string;
   voucher_no?: string;

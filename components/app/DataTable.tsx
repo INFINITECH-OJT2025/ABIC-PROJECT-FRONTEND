@@ -20,9 +20,22 @@ function TruncatedCell({ content, maxWidth }: { content: ReactNode, maxWidth: st
         }
 
         checkTruncation()
-        // Optional: Re-check on window resize in case table flexibility changes
-        window.addEventListener('resize', checkTruncation)
-        return () => window.removeEventListener('resize', checkTruncation)
+
+        const el = textRef.current;
+        if (!el) return;
+
+        const observer = new ResizeObserver(() => {
+            checkTruncation()
+        });
+
+        // Observe the parent container (td) to react to table column size changes
+        if (el.parentElement) {
+            observer.observe(el.parentElement);
+        } else {
+            observer.observe(el);
+        }
+
+        return () => observer.disconnect()
     }, [content]) // Re-run if content changes
 
     const StringContent = typeof content === "string" || typeof content === "number" ? String(content) : undefined
