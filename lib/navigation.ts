@@ -83,7 +83,7 @@ export const superAdminNav: NavEntry[] = [
             { label: "Cash Vouchers List", href: "/super/accountant/voucher/cash-voucher-list", icon: ScrollText },
             { label: "Cheque Vouchers List", href: "/super/accountant/voucher/cheque-voucher-list", icon: ScrollText },
         ],
-    },  
+    },
     {
         type: "group", label: "TRANSACTIONS", icon: FileText, items: [
             { label: "New Transaction", href: "/super/accountant/transactions", icon: Plus },
