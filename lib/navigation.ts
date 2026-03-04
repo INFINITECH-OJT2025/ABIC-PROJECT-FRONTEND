@@ -75,13 +75,13 @@ export const superAdminNav: NavEntry[] = [
     // ── Accountant section ──
     { type: "divider" },
     { type: "section", label: "Accountant" },
-    { type: "link", label: "ACCOUNTANT PANEL", href: "/super/accountant", icon: LayoutDashboard, exact: true },
+    { type: "link", label: "ACCOUNTANT PANEL", href: "/super/accountant/accountant-panel", icon: LayoutDashboard, exact: true },
         {
         type: "group", label: "VOUCHERS", icon: Banknote, items: [
-            { label: "Cash Voucher", href: "/super/accountant/cash-voucher", icon: Plus },
-            { label: "Cheque Voucher", href: "/super/accountant/cheque-voucher", icon: Plus },
-            { label: "Cash Vouchers List", href: "/super/accountant/cash-voucher-list", icon: ScrollText },
-            { label: "Cheque Vouchers List", href: "/super/accountant/cheque-voucher-list", icon: ScrollText },
+            { label: "Cash Voucher", href: "/super/accountant/voucher/cash-voucher", icon: Plus },
+            { label: "Cheque Voucher", href: "/super/accountant/voucher/cheque-voucher", icon: Plus },
+            { label: "Cash Vouchers List", href: "/super/accountant/voucher/cash-voucher-list", icon: ScrollText },
+            { label: "Cheque Vouchers List", href: "/super/accountant/voucher/cheque-voucher-list", icon: ScrollText },
         ],
     },  
     {
