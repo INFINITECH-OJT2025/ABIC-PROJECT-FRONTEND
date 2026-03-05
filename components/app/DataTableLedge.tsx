@@ -68,7 +68,7 @@ function TruncatedCell({ content, maxWidth }: { content: ReactNode, maxWidth: st
 
 interface InstrumentFilesPopoverProps {
     label: string
-    files: { name: string; url?: string | null }[]
+    files: { name: string; url?: string | null; type?: string | null }[]
     children: React.ReactNode
 }
 
@@ -95,9 +95,9 @@ function InstrumentFilesPopover({ label, files, children }: InstrumentFilesPopov
         if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null }
     }, [])
 
-    function openFile(f: { name: string; url?: string | null }) {
+    function openFile(f: { name: string; url?: string | null; type?: string | null }) {
         if (!f.url) return
-        setPreviewFile({ name: f.name, src: f.url })
+        setPreviewFile({ name: f.name, src: f.url, type: f.type ?? undefined })
         setPanelOpen(true)
         setVisible(false)
     }

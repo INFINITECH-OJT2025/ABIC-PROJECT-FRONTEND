@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useAppToast } from "@/components/app/toast/AppToastProvider";
 import { SuccessTransactionData } from "./types";
-import { generateReceiptPDF } from "./ReceiptGenerator";
+import { generateReceiptPDF, pdfToImage } from "./ReceiptGenerator";
 import { formatDate, getTransactionTypeLabel } from "@/components/app/super/accountant/helpers";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -83,12 +83,26 @@ export default function TransactionSuccessPanel({
                 setIsUploadingReceipt(true);
                 try {
                     // 1. Generate PDF blob
-                    const blob = await generateReceiptPDF(d, transactionType);
+                    const pdfBlob = await generateReceiptPDF(d, transactionType);
+
+                    // 1.5 Convert to image (since Cloudinary setup prefers images)
+                    let finalBlob = pdfBlob;
+                    let fileName = `Receipt_${d.voucher_no ?? d.id}.pdf`;
+                    let fileType = "application/pdf";
+
+                    try {
+                        const imgBlob = await pdfToImage(pdfBlob);
+                        finalBlob = imgBlob;
+                        fileName = `Receipt_${d.voucher_no ?? d.id}.png`;
+                        fileType = "image/png";
+                    } catch (e) {
+                        console.error("Failed to convert receipt to image:", e);
+                        // Fallback leaves finalBlob as PDF
+                    }
 
                     // 2. Prepare form data
                     const body = new FormData();
-                    const fileName = `Receipt_${d.voucher_no ?? d.id}.pdf`;
-                    body.append("receipt", new File([blob], fileName, { type: "application/pdf" }));
+                    body.append("receipt", new File([finalBlob], fileName, { type: fileType }));
 
                     // 3. Upload to backend
                     const endpoint = `/api/accountant/transactions/${d.id}/receipt`;
@@ -298,7 +312,7 @@ export default function TransactionSuccessPanel({
                                 )}
                                 {d.voucher_date && (
                                     <div className="flex items-start justify-between gap-2">
-                                        <span className="text-xs text-gray-600 shrink-0">Voucher Date</span>
+                                        <span className="text-xs text-gray-600 shrink-0">Date</span>
                                         <span className="text-sm font-medium text-gray-900 text-right break-words whitespace-normal min-w-0 max-w-[65%]">
                                             {formatDate(d.voucher_date)}
                                         </span>

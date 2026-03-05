@@ -370,7 +370,7 @@ export const ReceiptPDF: React.FC<ReceiptPDFProps> = ({
                 )}
                 {d.voucher_date && (
                   <View style={styles.groupRowLast}>
-                    <Text style={styles.labelLight}>Voucher Date</Text>
+                    <Text style={styles.labelLight}>Date</Text>
                     <Text style={styles.valueNormal}>{formatDate(d.voucher_date)}</Text>
                   </View>
                 )}

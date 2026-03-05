@@ -11,6 +11,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import AppHeader from "@/components/app/AppHeader";
 import DataTableLedge, { InstrumentFilesPopover } from "@/components/app/DataTableLedge";
+import InfoTooltip from "@/components/app/InfoTooltip";
 import SharedToolbar from "@/components/app/SharedToolbar";
 import { DataTableColumn } from "@/components/app/DataTable";
 
@@ -122,7 +123,8 @@ function SystemLedgerPage() {
                 const files: { name: string; url?: string | null }[] =
                     (row.instrumentAttachments ?? []).map((a: any) => ({
                         name: a.instrumentNo ?? a.file_name ?? a.name ?? "—",
-                        url: a.attachmentUrl ?? a.file_url ?? a.url ?? null
+                        url: a.attachmentUrl ?? a.file_url ?? a.url ?? null,
+                        type: a.file_type ?? a.mimeType ?? a.mime_type ?? null,
                     }))
                 if (files.length === 0) return row.transType as string
                 const trigger = (
@@ -148,6 +150,29 @@ function SystemLedgerPage() {
             minWidth: "180px",
             maxWidth: "180px",
             sortable: true,
+            renderCell: (row) => {
+                if (!row.otherOwnerType || !row.otherOwnerId) {
+                    return (
+                        <InfoTooltip text={row.owner}>
+                            <span className="truncate block cursor-default">{row.owner}</span>
+                        </InfoTooltip>
+                    );
+                }
+                const destType = row.otherOwnerType.toLowerCase();
+                let targetUrl = `/super/accountant/ledger/${destType}?targetOwnerId=${row.otherOwnerId}&highlightTx=${row.transactionId}`;
+                if (row.otherUnitId) targetUrl += `&targetUnitId=${row.otherUnitId}`;
+                return (
+                    <InfoTooltip text={row.owner}>
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); router.push(targetUrl); }}
+                            className="truncate block w-full font-semibold text-[#7a0f1f] underline decoration-dotted underline-offset-2 hover:text-[#5f0c18] transition-colors cursor-pointer"
+                        >
+                            {row.owner}
+                        </button>
+                    </InfoTooltip>
+                );
+            },
         },
         {
             key: "particulars",
