@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import {
     Building2,
     ChevronDown,
@@ -10,9 +10,11 @@ import {
     Search,
     FileText
 } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import AppHeader from "@/components/app/AppHeader";
 import DataTableLedge, { InstrumentFilesPopover } from "@/components/app/DataTableLedge";
+import InfoTooltip from "@/components/app/InfoTooltip";
 import SharedToolbar from "@/components/app/SharedToolbar";
 import { DataTableColumn } from "@/components/app/DataTable";
 
@@ -38,6 +40,7 @@ interface LedgerEntry {
     voucherNo: string;
     otherOwnerId: number | null;
     otherOwnerType: string | null;
+    otherUnitId: number | null;
     transType: string;
     owner: string;
     particulars: string;
@@ -221,7 +224,13 @@ function UnitSelectDropdown({
     );
 }
 
-export default function CompanyLedgerPage() {
+function CompanyLedgerPage() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const highlightTx = searchParams.get("highlightTx");
+    const [initialOwnerId] = useState(searchParams.get("targetOwnerId"));
+    const [initialUnitId] = useState(searchParams.get("targetUnitId"));
+
     // Component State
     const [owners, setOwners] = useState<Owner[]>([]);
     const [ownersLoading, setOwnersLoading] = useState(true);
@@ -251,7 +260,11 @@ export default function CompanyLedgerPage() {
                     // Filter for COMPANY instead of MAIN/CLIENT
                     const companies = rawData.filter((o: Owner) => o.owner_type === "COMPANY");
                     setOwners(companies);
-                    if (companies.length > 0) {
+                    if (initialOwnerId) {
+                        const exists = companies.find((o: Owner) => String(o.id) === initialOwnerId);
+                        if (exists) setSelectedOwnerId(initialOwnerId);
+                        else if (companies.length > 0) setSelectedOwnerId(companies[0].id);
+                    } else if (companies.length > 0) {
                         setSelectedOwnerId(companies[0].id);
                     }
                 }
@@ -268,6 +281,12 @@ export default function CompanyLedgerPage() {
                 if (data.success) {
                     const rawUnits = Array.isArray(data.data?.data) ? data.data.data : (Array.isArray(data.data) ? data.data : []);
                     setUnits(rawUnits);
+                    if (initialUnitId && String(selectedOwnerId) === String(initialOwnerId)) {
+                        const exists = rawUnits.find((u: Unit) => String(u.id) === initialUnitId);
+                        if (exists) setSelectedUnitId(initialUnitId);
+                    } else {
+                        setSelectedUnitId("ALL");
+                    }
                 }
             })
             .catch(err => console.error(err));
@@ -335,7 +354,8 @@ export default function CompanyLedgerPage() {
                 const files: { name: string; url?: string | null }[] =
                     (row.instrumentAttachments ?? []).map((a: any) => ({
                         name: a.instrumentNo ?? a.file_name ?? a.name ?? "—",
-                        url: a.attachmentUrl ?? a.file_url ?? a.url ?? null
+                        url: a.attachmentUrl ?? a.file_url ?? a.url ?? null,
+                        type: a.file_type ?? a.mimeType ?? a.mime_type ?? null,
                     }))
                 if (files.length === 0) return row.transType as string
                 const trigger = (
@@ -361,6 +381,29 @@ export default function CompanyLedgerPage() {
             minWidth: "180px",
             maxWidth: "180px",
             sortable: true,
+            renderCell: (row) => {
+                if (!row.otherOwnerType || !row.otherOwnerId) {
+                    return (
+                        <InfoTooltip text={row.owner}>
+                            <span className="truncate block cursor-default">{row.owner}</span>
+                        </InfoTooltip>
+                    );
+                }
+                const destType = row.otherOwnerType.toLowerCase();
+                let targetUrl = `/super/accountant/ledger/${destType}?targetOwnerId=${row.otherOwnerId}&highlightTx=${row.transactionId}`;
+                if (row.otherUnitId) targetUrl += `&targetUnitId=${row.otherUnitId}`;
+                return (
+                    <InfoTooltip text={row.owner}>
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); router.push(targetUrl); }}
+                            className="truncate block w-full font-semibold text-[#7a0f1f] underline decoration-dotted underline-offset-2 hover:text-[#5f0c18] transition-colors cursor-pointer"
+                        >
+                            {row.owner}
+                        </button>
+                    </InfoTooltip>
+                );
+            },
         },
         {
             key: "particulars",
@@ -584,10 +627,29 @@ export default function CompanyLedgerPage() {
                             onPageChange={setCurrentPage}
                             itemName="entries"
                             loading={entriesLoading}
+                            getRowId={(row) => `row-${row.transactionId}`}
+                            highlightRowId={highlightTx ? `row-${highlightTx}` : undefined}
+                            onRowClick={(row) => {
+                                if (!row.otherOwnerType || !row.otherOwnerId) return;
+                                const destinationLedgerType = row.otherOwnerType.toLowerCase();
+                                let targetUrl = `/super/accountant/ledger/${destinationLedgerType}?targetOwnerId=${row.otherOwnerId}&highlightTx=${row.transactionId}`;
+                                if (row.otherUnitId) {
+                                    targetUrl += `&targetUnitId=${row.otherUnitId}`;
+                                }
+                                router.push(targetUrl);
+                            }}
                         />
                     </div>
                 </section>
             </div>
         </div>
+    );
+}
+
+export default function CompanyLedgerPageWrapper() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-gray-50/50" />}>
+            <CompanyLedgerPage />
+        </Suspense>
     );
 }

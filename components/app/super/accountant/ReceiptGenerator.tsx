@@ -39,7 +39,7 @@ export const generateReceiptPDF = async (
 /**
  * Convert PDF blob to image blob
  */
-const pdfToImage = async (pdfBlob: Blob): Promise<Blob> => {
+export const pdfToImage = async (pdfBlob: Blob): Promise<Blob> => {
   try {
     const arrayBuffer = await pdfBlob.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ 

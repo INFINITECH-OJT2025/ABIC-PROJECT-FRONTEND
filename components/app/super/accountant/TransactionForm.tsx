@@ -1082,10 +1082,10 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                 {/* ── LEFT: Main form ── */}
                 <div className="min-w-0">
 
-                    {/* ROW 1: Mode toggles + Voucher Details side-by-side (conditionally) */}
-                    <div className="flex flex-col lg:flex-row gap-4 items-start">
+                    {/* ROW 1: Mode toggles & Voucher Details (separate rows) */}
+                    <div className="flex flex-col gap-4 items-start w-full">
                         {/* Mode toggles */}
-                        <div className={`transition-all duration-500 ease-in-out w-full shrink-0 ${voucherMode === "WITH_VOUCHER" ? "lg:max-w-[400px]" : "lg:max-w-full"}`}>
+                        <div className="w-full">
                             <SectionCard title="Transaction Mode" icon={<ArrowDownCircle className="w-4 h-4" />}>
                                 <div className="flex flex-col gap-4">
                                     <ToggleGroup<TransactionMode>
@@ -1109,12 +1109,12 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                         </div>
 
                         {/* Voucher Details (conditional) */}
-                        <div className={`transition-all duration-500 ease-in-out w-full origin-left overflow-hidden ${voucherMode === "WITH_VOUCHER" ? "lg:flex-1 opacity-100 max-h-[1000px]" : "lg:max-w-0 opacity-0 max-h-0 lg:ml-[-24px] !p-0"}`}>
-                            <div className="min-w-full lg:min-w-[400px]">
+                        <div className={`transition-all duration-500 ease-in-out w-full overflow-hidden ${voucherMode === "WITH_VOUCHER" ? "opacity-100 max-h-[1000px]" : "opacity-0 max-h-0 !p-0"}`}>
+                            <div className="w-full">
                                 <SectionCard title="Voucher Details" icon={<FileText className="w-4 h-4" />}>
                                     <div id="field-voucher_date">
                                         <InputField
-                                            label="Voucher Date"
+                                            label="Date"
                                             required
                                             icon={<Calendar className="w-4 h-4" />}
                                             error={errors.voucher_date}
@@ -1671,7 +1671,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                                             )}
                                             {formData.voucher_date && (
                                                 <div className="flex items-start justify-between gap-2">
-                                                    <span className="text-xs text-gray-600 shrink-0">Voucher Date</span>
+                                                    <span className="text-xs text-gray-600 shrink-0">Date</span>
                                                     <span className="text-sm font-medium text-gray-900 text-right break-words whitespace-normal min-w-0 max-w-[65%]">
                                                         {formatDate(formData.voucher_date)}
                                                     </span>
@@ -1725,9 +1725,14 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                                         <div className="pb-3 border-b" style={{ borderColor: BORDER }}>
                                             <div className="flex items-start justify-between gap-2">
                                                 <span className="text-xs font-semibold text-gray-700 shrink-0">Unit</span>
-                                                <span className="text-sm font-medium text-gray-900 text-right break-words whitespace-normal min-w-0 max-w-[65%]">
-                                                    {selectedUnit.unit_name}
-                                                </span>
+                                                <div className="flex flex-col items-end gap-1.5 min-w-0 max-w-[65%]">
+                                                    <span className="text-sm font-medium text-gray-900 text-right break-words whitespace-normal">
+                                                        {selectedUnit.unit_name}
+                                                    </span>
+                                                    <span className="text-[10px] font-bold text-[#7a0f1f] bg-red-50 border border-red-100 px-1.5 py-0.5 rounded uppercase tracking-wide">
+                                                        Saves to Unit Ledger
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
