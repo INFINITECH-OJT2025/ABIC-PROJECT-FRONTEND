@@ -133,7 +133,7 @@ export default function PrintableView() {
                 <p className="text-white/80 text-sm mt-0.5">Cash Voucher Creation</p>
               </div>
 
-              <div className="ml-auto">
+              {/* <div className="ml-auto">
                 <button
                   type="button"
                   onClick={prepareVoucher}
@@ -143,12 +143,12 @@ export default function PrintableView() {
                   <RefreshCcw className="w-4 h-4" />
                   {isPreparing ? "Generating..." : "Generate Voucher No"}
                 </button>
-              </div>
+              </div> */}
             </div>
           </div>
         </div>
 
-<div className="w-full px-8 py-8">          {/* FORM SECTION (Row 1) */}
+        <div className="w-full px-8 py-8">          {/* FORM SECTION (Row 1) */}
           <FormSection formData={formData} onInputChange={handleInputChange} onSuccessClear={confirmClearForm} />
 
           {/* PREVIEW SECTION (Row 2) */}

@@ -68,7 +68,7 @@ function TruncatedCell({ content, maxWidth }: { content: ReactNode, maxWidth: st
 
 interface InstrumentFilesPopoverProps {
     label: string
-    files: { name: string; url?: string | null }[]
+    files: { name: string; url?: string | null; type?: string | null }[]
     children: React.ReactNode
 }
 
@@ -95,9 +95,9 @@ function InstrumentFilesPopover({ label, files, children }: InstrumentFilesPopov
         if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null }
     }, [])
 
-    function openFile(f: { name: string; url?: string | null }) {
+    function openFile(f: { name: string; url?: string | null; type?: string | null }) {
         if (!f.url) return
-        setPreviewFile({ name: f.name, src: f.url })
+        setPreviewFile({ name: f.name, src: f.url, type: f.type ?? undefined })
         setPanelOpen(true)
         setVisible(false)
     }
@@ -394,18 +394,35 @@ export default function DataTableLedge<T extends Record<string, any>>({
     const [internalSortDir, setInternalSortDir] = useState<SortDirection>(null)
     const scrollRef = useRef<HTMLDivElement>(null)
 
-    // Handle highlighted row scroll
+    // Handle highlighted row scroll + flash animation
     useEffect(() => {
         if (!highlightRowId || displayRows.length === 0) return;
-        
+
         // Wait a small tick for DOM to update and rows to truly mount
         const timer = setTimeout(() => {
             const el = document.getElementById(highlightRowId);
             if (el) {
-                // Smooth scroll standard DOM behavior into the exact center of view
+                // Smooth scroll into center of view
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                // Optional: We can pulse or set a temporary background color if we want later,
-                // but the CSS border highlighting does a lot of the visual work already if managed strictly via selected.
+                // Pulse animation: flash amber background 3 times
+                let flashes = 0;
+                const originalBg = el.style.background;
+                const flash = () => {
+                    if (flashes >= 3) {
+                        el.style.transition = '';
+                        el.style.background = originalBg;
+                        return;
+                    }
+                    el.style.transition = 'background 250ms ease';
+                    el.style.background = 'rgba(251, 191, 36, 0.45)'; // amber-400/45
+                    flashes++;
+                    setTimeout(() => {
+                        el.style.transition = 'background 350ms ease';
+                        el.style.background = originalBg;
+                        setTimeout(flash, 300);
+                    }, 350);
+                };
+                setTimeout(flash, 200);
             }
         }, 150);
         return () => clearTimeout(timer);

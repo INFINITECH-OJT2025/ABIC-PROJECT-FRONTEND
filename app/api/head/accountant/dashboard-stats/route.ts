@@ -6,10 +6,13 @@ export async function GET(req: Request) {
         const cookieStore = await cookies();
         const token = cookieStore.get("token")?.value;
 
+        const url = new URL(req.url);
+        const searchParams = url.search;
+
         const backendUrl =
             process.env.BACKEND_URL ?? "http://127.0.0.1:8000";
 
-        const backendRes = await fetch(`${backendUrl}/api/accountant/dashboard-stats`, {
+        const backendRes = await fetch(`${backendUrl}/api/accountant/dashboard-stats${searchParams}`, {
             method: "GET",
             headers: {
                 Authorization: `Bearer ${token}`,
