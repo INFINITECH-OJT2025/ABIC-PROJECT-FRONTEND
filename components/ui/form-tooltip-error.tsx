@@ -19,7 +19,7 @@ export default function FormTooltipError({
 
   return (
     <div className="relative mt-2">
-      <div className="absolute left-0 right-0 z-10">
+      <div className="absolute left-0 right-0 z-[999]">
         <AnimatePresence>
           {message && (
             <motion.div

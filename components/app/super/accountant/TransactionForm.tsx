@@ -207,8 +207,8 @@ function OwnerDropdown({
     }, []);
 
     return (
-        <div ref={ref} className="relative flex flex-col gap-2">
-            <label className="text-sm font-semibold text-gray-700 mt-1.5">
+        <div ref={ref} className="relative flex flex-col gap-1.5">
+            <label className="text-sm font-semibold text-gray-700">
                 {label} {required && <span className="text-red-500">*</span>}
             </label>
             <div
@@ -328,8 +328,8 @@ function FileDropZone({ label, files, onAdd, onRemove, accept, multiple = true, 
     }
 
     return (
-        <div className="flex flex-col gap-2">
-            <label className="text-sm font-semibold text-gray-700 mt-1.5">{label}</label>
+        <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-semibold text-gray-700">{label}</label>
             <div
                 className={`relative border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${dragging
                     ? "border-[#7a0f1f] bg-[#7a0f1f]/5"
@@ -411,7 +411,7 @@ function SectionCard({ title, children, icon, className = "" }: { title: string;
                 {icon && <span className="text-[#7a0f1f]">{icon}</span>}
                 <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">{title}</h3>
             </div>
-            <div className="px-6 py-5 space-y-7">{children}</div>
+            <div className="px-6 py-5 space-y-4">{children}</div>
         </div>
     );
 }
@@ -424,6 +424,7 @@ function InputField({
     icon,
     error,
     onCloseError,
+    characterCount,
     children,
 }: {
     label: string;
@@ -431,16 +432,22 @@ function InputField({
     icon?: React.ReactNode;
     error?: string;
     onCloseError?: () => void;
+    characterCount?: string;
     children: React.ReactNode;
 }) {
     return (
-        <div className="flex flex-col gap-2">
-            <label className="text-sm font-semibold text-gray-700 mt-1.5">
-                {label} {required && <span className="text-red-500">*</span>}
-            </label>
+        <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold text-gray-700">
+                    {label} {required && <span className="text-red-500">*</span>}
+                </label>
+                {characterCount && (
+                    <span className="text-xs font-semibold text-gray-400">{characterCount}</span>
+                )}
+            </div>
             <div className="relative">
                 {icon && (
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10">
+                    <div className="absolute left-3 top-3 text-gray-400 z-10 flex items-center justify-center pointer-events-none">
                         {icon}
                     </div>
                 )}
@@ -1070,90 +1077,89 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                 onClose={() => setPreviewFile(null)}
                 zIndex={70}
             />
-            <div className="transaction-grid grid grid-cols-1 gap-6 items-start">
+            <div className="transaction-grid grid grid-cols-1 gap-4 items-start">
 
                 {/* ── LEFT: Main form ── */}
                 <div className="min-w-0">
 
-                    {/* ROW 1: Mode toggles + Voucher Details side-by-side */}
-                    <div className="grid grid-cols-[400px_1fr] gap-6">
+                    {/* ROW 1: Mode toggles + Voucher Details side-by-side (conditionally) */}
+                    <div className="flex flex-col lg:flex-row gap-4 items-start">
                         {/* Mode toggles */}
-                        <SectionCard title="Transaction Mode" icon={<ArrowDownCircle className="w-4 h-4" />}>
-                            <div className="flex flex-col gap-6">
-                                <ToggleGroup<TransactionMode>
-                                    value={mode}
-                                    onChange={handleModeChange}
-                                    options={[
-                                        { value: "DEPOSIT", label: "Deposit", icon: <ArrowDownCircle className="w-4 h-4" /> },
-                                        { value: "WITHDRAWAL", label: "Withdrawal", icon: <ArrowUpCircle className="w-4 h-4" /> },
-                                    ]}
-                                />
-                                <ToggleGroup<VoucherMode>
-                                    value={voucherMode}
-                                    onChange={setVoucherMode}
-                                    options={[
-                                        { value: "WITH_VOUCHER", label: "With Voucher" },
-                                        { value: "NO_VOUCHER", label: "No Voucher" },
-                                    ]}
-                                />
-                            </div>
-                        </SectionCard>
-
-                        {/* Voucher Details (conditional) */}
-                        {voucherMode === "WITH_VOUCHER" ? (
-                            <SectionCard title="Voucher Details" icon={<FileText className="w-4 h-4" />}>
-                                <div id="field-voucher_date">
-                                    <InputField
-                                        label="Voucher Date"
-                                        required
-                                        icon={<Calendar className="w-4 h-4" />}
-                                        error={errors.voucher_date}
-                                        onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.voucher_date; return n; })}
-                                    >
-                                        <input
-                                            type="date"
-                                            value={formData.voucher_date}
-                                            max={new Date().toISOString().split("T")[0]}
-                                            onChange={(e) => {
-                                                setFormData((p) => ({ ...p, voucher_date: e.target.value }));
-                                                if (errors.voucher_date && e.target.value)
-                                                    setErrors((p) => { const n = { ...p }; delete n.voucher_date; return n; });
-                                            }}
-                                            className={`${inputCls(true, errors.voucher_date)} cursor-pointer`}
-                                        />
-                                    </InputField>
-                                </div>{/* /field-voucher_date */}
-                                <div id="field-voucherFile" className="relative">
-                                    {isCheckingVoucher && (
-                                        <div className="absolute -top-1 right-0 z-10 flex items-center gap-1.5 text-xs font-semibold text-[#7a0f1f] bg-white px-2 py-0.5 rounded-full shadow-sm border border-[#7a0f1f]/20">
-                                            <span className="w-3 h-3 rounded-full border-2 border-[#7a0f1f] border-t-transparent animate-spin inline-block" />
-                                            Checking…
-                                        </div>
-                                    )}
-                                    <FileDropZone
-                                        label="Voucher Upload *"
-                                        files={voucherFile ? [voucherFile] : []}
-                                        onAdd={addVoucherFile}
-                                        onRemove={() => setVoucherFile(null)}
-                                        multiple={false}
-                                        error={errors.voucherFile}
-                                        onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.voucherFile; return n; })}
+                        <div className={`transition-all duration-500 ease-in-out w-full shrink-0 ${voucherMode === "WITH_VOUCHER" ? "lg:max-w-[400px]" : "lg:max-w-full"}`}>
+                            <SectionCard title="Transaction Mode" icon={<ArrowDownCircle className="w-4 h-4" />}>
+                                <div className="flex flex-col gap-4">
+                                    <ToggleGroup<TransactionMode>
+                                        value={mode}
+                                        onChange={handleModeChange}
+                                        options={[
+                                            { value: "DEPOSIT", label: "Deposit", icon: <ArrowDownCircle className="w-4 h-4" /> },
+                                            { value: "WITHDRAWAL", label: "Withdrawal", icon: <ArrowUpCircle className="w-4 h-4" /> },
+                                        ]}
+                                    />
+                                    <ToggleGroup<VoucherMode>
+                                        value={voucherMode}
+                                        onChange={setVoucherMode}
+                                        options={[
+                                            { value: "WITH_VOUCHER", label: "With Voucher" },
+                                            { value: "NO_VOUCHER", label: "No Voucher" },
+                                        ]}
                                     />
                                 </div>
                             </SectionCard>
-                        ) : (
-                            /* placeholder so grid stays balanced */
-                            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/40 flex items-center justify-center">
-                                <p className="text-sm text-gray-400 font-medium">No Voucher Mode</p>
+                        </div>
+
+                        {/* Voucher Details (conditional) */}
+                        <div className={`transition-all duration-500 ease-in-out w-full origin-left overflow-hidden ${voucherMode === "WITH_VOUCHER" ? "lg:flex-1 opacity-100 max-h-[1000px]" : "lg:max-w-0 opacity-0 max-h-0 lg:ml-[-24px] !p-0"}`}>
+                            <div className="min-w-full lg:min-w-[400px]">
+                                <SectionCard title="Voucher Details" icon={<FileText className="w-4 h-4" />}>
+                                    <div id="field-voucher_date">
+                                        <InputField
+                                            label="Voucher Date"
+                                            required
+                                            icon={<Calendar className="w-4 h-4" />}
+                                            error={errors.voucher_date}
+                                            onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.voucher_date; return n; })}
+                                        >
+                                            <input
+                                                type="date"
+                                                value={formData.voucher_date}
+                                                max={new Date().toISOString().split("T")[0]}
+                                                onChange={(e) => {
+                                                    setFormData((p) => ({ ...p, voucher_date: e.target.value }));
+                                                    if (errors.voucher_date && e.target.value)
+                                                        setErrors((p) => { const n = { ...p }; delete n.voucher_date; return n; });
+                                                }}
+                                                className={`${inputCls(true, errors.voucher_date)} cursor-pointer`}
+                                            />
+                                        </InputField>
+                                    </div>{/* /field-voucher_date */}
+                                    <div id="field-voucherFile" className={`relative transition-all duration-300 ${errors.voucherFile ? "pb-12" : ""}`}>
+                                        {isCheckingVoucher && (
+                                            <div className="absolute -top-1 right-0 z-10 flex items-center gap-1.5 text-xs font-semibold text-[#7a0f1f] bg-white px-2 py-0.5 rounded-full shadow-sm border border-[#7a0f1f]/20">
+                                                <span className="w-3 h-3 rounded-full border-2 border-[#7a0f1f] border-t-transparent animate-spin inline-block" />
+                                                Checking…
+                                            </div>
+                                        )}
+                                        <FileDropZone
+                                            label="Voucher Upload *"
+                                            files={voucherFile ? [voucherFile] : []}
+                                            onAdd={addVoucherFile}
+                                            onRemove={() => setVoucherFile(null)}
+                                            multiple={false}
+                                            error={errors.voucherFile}
+                                            onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.voucherFile; return n; })}
+                                        />
+                                    </div>
+                                </SectionCard>
                             </div>
-                        )}
+                        </div>
                     </div>
 
                     {/* 2. Payment Details */}
                     <SectionCard title="Payment Details" icon={<DollarSign className="w-4 h-4" />} className="mt-6">
                         {/* Transaction Type */}
-                        <div id="field-transaction_type" className="flex flex-col gap-2">
-                            <label className="text-sm font-semibold text-gray-700 mt-1.5">
+                        <div id="field-transaction_type" className="flex flex-col gap-1.5">
+                            <label className="text-sm font-semibold text-gray-700">
                                 Transaction Type <span className="text-red-500">*</span>
                             </label>
 
@@ -1326,7 +1332,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                             </button>
 
                             <div ref={unitDropdownRef} className="relative flex flex-col gap-2">
-                                <label className="text-sm font-semibold text-gray-700 mt-1.5">Unit <span className="text-red-500">*</span></label>
+                                <label className="text-sm font-semibold text-gray-700">Unit <span className="text-red-500">*</span></label>
                                 <div
                                     className={`flex items-center h-10 rounded-lg border bg-white cursor-pointer transition-all ${errors.unit_id ? "border-red-400" : "border-gray-300 hover:border-gray-400"
                                         }`}
@@ -1388,8 +1394,8 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                     {/* 4. Amount & Details */}
                     <SectionCard title="Amount & Details" icon={<DollarSign className="w-4 h-4" />} className="mt-6">
                         {/* Amount */}
-                        <div id="field-amount" className="flex flex-col gap-2">
-                            <label className="text-sm font-semibold text-gray-700 mt-1.5">Amount <span className="text-red-500">*</span></label>
+                        <div id="field-amount" className="flex flex-col gap-1.5">
+                            <label className="text-sm font-semibold text-gray-700">Amount <span className="text-red-500">*</span></label>
                             <div className="relative flex items-center h-10 rounded-lg border bg-white focus-within:ring-2 transition-all overflow-hidden text-sm focus-within:border-[#7B0F2B] focus-within:ring-[#7B0F2B]/20 border-gray-300">
                                 <div className="flex h-full items-center px-3 bg-gray-50 border-r border-gray-200 text-[#800020] font-bold select-none">₱</div>
                                 <input
@@ -1418,6 +1424,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                                 icon={<AlignLeft className="w-4 h-4" />}
                                 error={errors.particulars}
                                 onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.particulars; return n; })}
+                                characterCount={`${formData.particulars.length}/500`}
                             >
                                 <textarea
                                     value={formData.particulars}
@@ -1433,7 +1440,6 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                                         : "border-gray-300 focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20"
                                         }`}
                                 />
-                                <span className="block text-right text-xs text-gray-400 mt-1">{formData.particulars.length}/500</span>
                             </InputField>
                         </div>{/* /field-particulars */}
 
@@ -1443,6 +1449,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                             icon={<Tag className="w-4 h-4" />}
                             error={errors.fund_reference}
                             onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.fund_reference; return n; })}
+                            characterCount={`${formData.fund_reference.length}/50`}
                         >
                             <input
                                 type="text"
@@ -1456,7 +1463,6 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                                 className={inputCls(true, errors.fund_reference)}
                             />
                         </InputField>
-                        <span className="block text-right text-xs text-gray-400 -mt-5">{formData.fund_reference.length}/50</span>
 
                         {/* Person in Charge */}
                         <InputField
@@ -1464,6 +1470,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                             icon={<UserCheck className="w-4 h-4" />}
                             error={errors.person_in_charge}
                             onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.person_in_charge; return n; })}
+                            characterCount={`${formData.person_in_charge.length}/100`}
                         >
                             <input
                                 type="text"
@@ -1477,13 +1484,12 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                                 className={inputCls(true, errors.person_in_charge)}
                             />
                         </InputField>
-                        <span className="block text-right text-xs text-gray-400 -mt-5">{formData.person_in_charge.length}/100</span>
                     </SectionCard>
 
                 </div>{/* end LEFT */}
 
                 {/* ── RIGHT: Attachments + Summary ── */}
-                <div className="flex flex-col gap-6 w-full h-full pb-8">
+                <div className="flex flex-col gap-4 w-full pb-8 sticky top-6 self-start">
 
                     {/* Uploaded Attachments Section - Inspiration layout */}
                     {shouldShowAttachments && (uploadedFiles.length > 0 || voucherFile) && (
@@ -1497,7 +1503,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                                 </span>
                             </div>
 
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 {/* Voucher File */}
                                 {voucherFile && (
                                     <>
@@ -1604,8 +1610,8 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                     )}
 
                     {/* Transaction Summary - Original header, inspiration content layout */}
-                    <div className="rounded-lg border overflow-hidden shadow-lg bg-white w-full" style={{ borderColor: BORDER }}>
-                        <div className="lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto" style={{ scrollbarWidth: "thin", scrollbarColor: "#cbd5e1 #f1f1f1" }}>
+                    <div className="rounded-lg border shadow-lg bg-white w-full flex flex-col lg:max-h-[calc(100vh-6rem)]" style={{ borderColor: BORDER }}>
+                        <div className="flex-1 overflow-y-auto rounded-t-lg" style={{ scrollbarWidth: "thin", scrollbarColor: "#cbd5e1 #f1f1f1" }}>
                             {/* Header - Original layout (amount, badges) */}
                             <div className="px-6 py-6 text-white" style={{ background: "linear-gradient(135deg, #7a0f1f, #a4163a)" }}>
                                 <div className="flex items-start justify-between gap-2">
@@ -1800,23 +1806,23 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                                     </p>
                                 </div>
                             )}
+                        </div>
 
-                            {/* Actions */}
-                            <div className="px-6 pb-6 pt-2 space-y-3">
-                                <button
-                                    type="button"
-                                    onClick={handleSubmit}
-                                    disabled={isSubmitting}
-                                    className="w-full h-11 rounded-lg font-semibold text-sm text-white shadow transition-opacity hover:opacity-90 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                    style={{ background: ACCENT }}
-                                >
-                                    <SendHorizonal className="w-4 h-4" />
-                                    {mode === "DEPOSIT" ? "Submit Deposit" : "Submit Withdrawal"}
-                                </button>
-                                <button type="button" onClick={() => setShowResetConfirm(true)} className="w-full h-10 rounded-lg text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors">
-                                    Reset Form
-                                </button>
-                            </div>
+                        {/* Actions (Docked at the bottom) */}
+                        <div className="px-5 py-4 bg-white border-t rounded-b-lg flex gap-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 shrink-0" style={{ borderColor: BORDER }}>
+                            <button type="button" onClick={() => setShowResetConfirm(true)} className="h-11 px-4 rounded-lg text-sm font-medium text-gray-600 border hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0" style={{ borderColor: BORDER }}>
+                                Reset Form
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSubmit}
+                                disabled={isSubmitting}
+                                className="flex-1 h-11 rounded-lg font-semibold text-sm text-white shadow transition-opacity hover:opacity-90 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                style={{ background: ACCENT }}
+                            >
+                                <SendHorizonal className="w-4 h-4" />
+                                {mode === "DEPOSIT" ? "Submit Deposit" : "Submit Withdrawal"}
+                            </button>
                         </div>
                     </div>
 

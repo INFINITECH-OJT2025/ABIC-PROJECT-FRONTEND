@@ -118,6 +118,7 @@ export default function TransactionSuccessPanel({
     // ── Handlers ────────────────────────────────────────────────────────────────
 
     function handleClose() {
+        if (isUploadingReceipt) return; // Prevent closing while uploading
         setIsClosing(true);
         setTimeout(() => {
             onClose();
@@ -176,7 +177,7 @@ export default function TransactionSuccessPanel({
         <>
             {/* Backdrop */}
             <div
-                className={`fixed inset-0 bg-black/50 z-40 transition-opacity duration-[350ms] ${isClosing ? "opacity-0" : "opacity-100"}`}
+                className={`fixed inset-0 bg-black/50 z-40 transition-opacity duration-[350ms] ${isClosing ? "opacity-0" : "opacity-100"} ${isUploadingReceipt ? "pointer-events-none cursor-wait" : ""}`}
                 onClick={handleClose}
                 aria-hidden="true"
             />
@@ -201,7 +202,9 @@ export default function TransactionSuccessPanel({
                     <button
                         type="button"
                         onClick={handleClose}
-                        className="absolute top-4 right-4 p-1.5 rounded-md hover:bg-white/20 transition-colors"
+                        disabled={isUploadingReceipt}
+                        className={`absolute top-4 right-4 p-1.5 rounded-md transition-colors ${isUploadingReceipt ? "opacity-50 cursor-not-allowed" : "hover:bg-white/20"
+                            }`}
                         aria-label="Close"
                     >
                         <X className="w-4 h-4" />

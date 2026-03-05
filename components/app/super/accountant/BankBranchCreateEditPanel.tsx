@@ -377,7 +377,7 @@ export default function BankBranchCreateEditPanel({
 
     const fieldClass =
         "w-full h-10 rounded-lg border border-gray-300 pl-10 pr-3 text-sm text-gray-900 bg-white focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none transition-all";
-    const labelClass = "block text-sm font-semibold text-gray-700 mb-1 mt-2";
+    const labelClass = "block text-sm font-semibold text-gray-700 mb-1";
 
     const animationStyle = isClosing
         ? "branchPanelSlideOut 0.35s cubic-bezier(0.32,0.72,0,1) forwards"
