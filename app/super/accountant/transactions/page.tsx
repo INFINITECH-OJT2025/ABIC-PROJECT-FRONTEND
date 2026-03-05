@@ -43,17 +43,7 @@ export default function TransactionsPage() {
                 subtitle={mode === "DEPOSIT" ? "Record a new deposit transaction" : "Record a new withdrawal transaction"}
             />
 
-            {/* Stats Bar */}
-            <SummaryBar>
-                <StatPill icon={ArrowDownCircle} label="Mode">
-                    <span className={mode === "DEPOSIT" ? "text-green-700 font-bold" : "text-red-700 font-bold"}>
-                        {mode === "DEPOSIT" ? "Deposit" : "Withdrawal"}
-                    </span>
-                </StatPill>
-                <StatPill icon={Receipt} label="Transaction" value="New" />
-                <StatPill icon={mode === "DEPOSIT" ? ArrowDownCircle : ArrowUpCircle}
-                    label={mode === "DEPOSIT" ? "Cash In" : "Cash Out"} value="—" />
-            </SummaryBar>
+       
 
             {/* Page Body */}
             <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8">

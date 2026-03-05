@@ -31,10 +31,16 @@ import {
     Info,
     Plus,
     SendHorizonal,
+    Printer,
+    Lock,
+    RefreshCw,
 } from "lucide-react";
 import FormTooltipError from "@/components/ui/form-tooltip-error";
 import OwnerCreateEditPanel from "@/components/app/super/accountant/OwnerCreateEditPanel";
 import UnitCreateEditPanel from "@/components/app/super/accountant/UnitCreateEditPanel";
+import { generateReceiptPDF } from "@/components/app/super/accountant/ReceiptGenerator";
+import TransactionSuccessPanel from "@/components/app/super/accountant/TransactionSuccessPanel";
+import type { SuccessTransactionData } from "@/components/app/super/accountant/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -201,8 +207,8 @@ function OwnerDropdown({
     }, []);
 
     return (
-        <div ref={ref} className="relative flex flex-col gap-2">
-            <label className="text-sm font-semibold text-gray-700 mt-1.5">
+        <div ref={ref} className="relative flex flex-col gap-1.5">
+            <label className="text-sm font-semibold text-gray-700">
                 {label} {required && <span className="text-red-500">*</span>}
             </label>
             <div
@@ -322,8 +328,8 @@ function FileDropZone({ label, files, onAdd, onRemove, accept, multiple = true, 
     }
 
     return (
-        <div className="flex flex-col gap-2">
-            <label className="text-sm font-semibold text-gray-700 mt-1.5">{label}</label>
+        <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-semibold text-gray-700">{label}</label>
             <div
                 className={`relative border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${dragging
                     ? "border-[#7a0f1f] bg-[#7a0f1f]/5"
@@ -405,7 +411,7 @@ function SectionCard({ title, children, icon, className = "" }: { title: string;
                 {icon && <span className="text-[#7a0f1f]">{icon}</span>}
                 <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">{title}</h3>
             </div>
-            <div className="px-6 py-5 space-y-7">{children}</div>
+            <div className="px-6 py-5 space-y-4">{children}</div>
         </div>
     );
 }
@@ -418,6 +424,7 @@ function InputField({
     icon,
     error,
     onCloseError,
+    characterCount,
     children,
 }: {
     label: string;
@@ -425,16 +432,22 @@ function InputField({
     icon?: React.ReactNode;
     error?: string;
     onCloseError?: () => void;
+    characterCount?: string;
     children: React.ReactNode;
 }) {
     return (
-        <div className="flex flex-col gap-2">
-            <label className="text-sm font-semibold text-gray-700 mt-1.5">
-                {label} {required && <span className="text-red-500">*</span>}
-            </label>
+        <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold text-gray-700">
+                    {label} {required && <span className="text-red-500">*</span>}
+                </label>
+                {characterCount && (
+                    <span className="text-xs font-semibold text-gray-400">{characterCount}</span>
+                )}
+            </div>
             <div className="relative">
                 {icon && (
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10">
+                    <div className="absolute left-3 top-3 text-gray-400 z-10 flex items-center justify-center pointer-events-none">
                         {icon}
                     </div>
                 )}
@@ -499,7 +512,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
 
     // ── Form data ─────────────────────────────────────────────────────────────
     const [formData, setFormData] = useState<TransactionFormData>({
-        transaction_type: "CASH DEPOSIT",
+        transaction_type: initialMode === "WITHDRAWAL" ? "CHEQUE" : "CASH DEPOSIT",
         from_owner_id: null,
         to_owner_id: null,
         unit_id: null,
@@ -544,7 +557,22 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
 
     // ── Confirmation / Loading modal ──────────────────────────────────────────
     const [showConfirm, setShowConfirm] = useState(false);
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // ── Print state ───────────────────────────────────────────────────────────
+    const [isPrinting, setIsPrinting] = useState(false);
+
+    // ── Success panel state ───────────────────────────────────────────────────
+    const [showSuccessPanel, setShowSuccessPanel] = useState(false);
+    const [successPanelData, setSuccessPanelData] = useState<SuccessTransactionData | null>(null);
+    const [successPanelMode, setSuccessPanelMode] = useState<"DEPOSIT" | "WITHDRAWAL">("DEPOSIT");
+
+    // ── Voucher duplicate check state ─────────────────────────────────────────
+    const [isCheckingVoucher, setIsCheckingVoucher] = useState(false);
+
+    // ── Cheque duplicate check state ──────────────────────────────────────────
+    const [isCheckingCheque, setIsCheckingCheque] = useState(false);
 
     // ── Validation errors ─────────────────────────────────────────────────────
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -683,15 +711,58 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
         return { id, file, preview, name: file.name, size: file.size };
     }
 
-    function addFiles(files: File[]) {
+    async function addFiles(files: File[]) {
         const valid = files.filter((f) => f.size <= 10 * 1024 * 1024);
-        setUploadedFiles((prev) => {
-            const existingNames = new Set(prev.map((f) => f.name));
-            const newFiles = valid
-                .filter((f) => !existingNames.has(f.name))
-                .map(makeUploadedFile);
-            return [...prev, ...newFiles];
-        });
+        if (valid.length === 0) return;
+
+        setIsCheckingCheque(true);
+        // Clear any previous uploadedFiles error
+        setErrors((p) => { const n = { ...p }; delete n.uploadedFiles; return n; });
+
+        try {
+            // Check each new file against the existing in-memory list (name-based dedup)
+            const existingNames = new Set(uploadedFiles.map((f) => f.name));
+            const candidateFiles = valid.filter((f) => !existingNames.has(f.name));
+
+            if (candidateFiles.length === 0) return;
+
+            // Check all candidates concurrently against the database
+            const results = await Promise.all(
+                candidateFiles.map(async (f) => {
+                    const instrumentNo = fileNameToInstrumentNo(f.name);
+                    try {
+                        const res = await fetch(
+                            `/api/head/accountant/transactions/check-instrument-no?instrument_no=${encodeURIComponent(instrumentNo)}`
+                        );
+                        const data = await res.json().catch(() => ({}));
+                        return { file: f, instrumentNo, exists: !!data.exists };
+                    } catch {
+                        // Network error — allow the file
+                        return { file: f, instrumentNo, exists: false };
+                    }
+                })
+            );
+
+            const duplicates = results.filter((r) => r.exists);
+            const accepted = results.filter((r) => !r.exists);
+
+            // Add accepted files
+            if (accepted.length > 0) {
+                setUploadedFiles((prev) => [...prev, ...accepted.map((r) => makeUploadedFile(r.file))]);
+            }
+
+            // Show error for duplicates
+            if (duplicates.length > 0) {
+                const names = duplicates.map((r) => `"${r.instrumentNo}"`).join(", ");
+                const label = duplicates.length === 1 ? "Cheque number" : "Cheque numbers";
+                setErrors((p) => ({
+                    ...p,
+                    uploadedFiles: `${label} ${names} already exist${duplicates.length === 1 ? "s" : ""}.`,
+                }));
+            }
+        } finally {
+            setIsCheckingCheque(false);
+        }
     }
 
     function removeFile(id: string) {
@@ -702,11 +773,39 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
         });
     }
 
-    function addVoucherFile(files: File[]) {
+    async function addVoucherFile(files: File[]) {
         const f = files[0];
         if (!f || f.size > 10 * 1024 * 1024) return;
         if (voucherFile?.preview) URL.revokeObjectURL(voucherFile.preview);
-        setVoucherFile(makeUploadedFile(f));
+
+        const newFile = makeUploadedFile(f);
+        setVoucherFile(newFile);
+        setIsCheckingVoucher(true);
+
+        // Clear any previous voucher file error optimistically
+        setErrors((p) => { const n = { ...p }; delete n.voucherFile; return n; });
+
+        try {
+            const voucherNo = fileNameToInstrumentNo(f.name);
+            const res = await fetch(
+                `/api/head/accountant/transactions/check-voucher-no?voucher_no=${encodeURIComponent(voucherNo)}`
+            );
+            const data = await res.json().catch(() => ({}));
+
+            if (data.exists) {
+                // Duplicate found — reject the file and show error
+                setVoucherFile(null);
+                setErrors((p) => ({
+                    ...p,
+                    voucherFile: `Voucher "${voucherNo}" already exists.`,
+                }));
+            }
+        } catch {
+            // Network error — allow the file but warn softly via console
+            console.warn("Could not verify voucher uniqueness. Proceeding anyway.");
+        } finally {
+            setIsCheckingVoucher(false);
+        }
     }
 
     // ─── Unit dropdown outside click ─────────────────────────────────────────
@@ -723,7 +822,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
 
     // ─── Validation & Submission ──────────────────────────────────────────────
 
-    function validateForm() {
+    function validateForm(): Record<string, string> {
         const newErrors: Record<string, string> = {};
 
         if (voucherMode === "WITH_VOUCHER") {
@@ -761,11 +860,39 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
         }
 
         setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+        return newErrors;
+    }
+
+    /** Priority-ordered list of field IDs — top to bottom in the form */
+    const FIELD_ORDER = [
+        "field-voucher_date",
+        "field-voucherFile",
+        "field-transaction_type",
+        "field-uploadedFiles",
+        "field-from_owner_id",
+        "field-to_owner_id",
+        "field-unit_id",
+        "field-amount",
+        "field-particulars",
+    ];
+
+    function scrollToFirstError(errs: Record<string, string>) {
+        for (const fieldId of FIELD_ORDER) {
+            const key = fieldId.replace("field-", "");
+            if (errs[key]) {
+                const el = document.getElementById(fieldId);
+                if (el) {
+                    el.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+                return;
+            }
+        }
     }
 
     function handleSubmit() {
-        if (!validateForm()) {
+        const errs = validateForm();
+        if (Object.keys(errs).length > 0) {
+            scrollToFirstError(errs);
             return;
         }
         // Open confirmation modal — actual submission happens in handleConfirmSubmit
@@ -827,6 +954,30 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                     data.message ?? "Transaction recorded successfully.",
                     "success"
                 );
+                // Build receipt data for the success panel
+                const receiptData: SuccessTransactionData = {
+                    id: data.data?.id,
+                    voucherMode,
+                    voucher_date: voucherMode === "WITH_VOUCHER" ? (formData.voucher_date || undefined) : undefined,
+                    voucher_no: voucherMode === "WITH_VOUCHER" && voucherFile
+                        ? voucherFile.name.replace(/\.[^.]+$/, "").toUpperCase()
+                        : undefined,
+                    transaction_type: formData.transaction_type,
+                    instrumentNumbers: uploadedFiles.map((f) => f.name.replace(/\.[^.]+$/, "")),
+                    fromOwnerName: selectedMainOwner?.name ?? "—",
+                    toOwnerName: selectedToOwner?.name ?? "—",
+                    unit_name: saveToUnitLedger && selectedUnit ? selectedUnit.unit_name : undefined,
+                    particulars: formData.particulars || undefined,
+                    fund_reference: formData.fund_reference || undefined,
+                    person_in_charge: formData.person_in_charge || undefined,
+                    attachmentsCount: uploadedFiles.length + (voucherFile ? 1 : 0),
+                    amount: formData.amount,
+                };
+
+                // Open success panel THEN reset the form
+                setSuccessPanelData(receiptData);
+                setSuccessPanelMode(mode);
+                setShowSuccessPanel(true);
                 handleReset();
             } else {
                 // Surface first validation error if available
@@ -843,6 +994,48 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
             showToast("Submission Failed", "An unexpected error occurred. Please try again.", "error");
         } finally {
             setIsSubmitting(false);
+        }
+    }
+
+    // ─── Print Handler ────────────────────────────────────────────────────────
+
+    async function handlePrint() {
+        setIsPrinting(true);
+        try {
+            const receiptData = {
+                id: 0,
+                voucherMode,
+                voucher_date: formData.voucher_date || undefined,
+                voucher_no: voucherFile ? fileNameToInstrumentNo(voucherFile.name) : undefined,
+                transaction_type: formData.transaction_type,
+                instrumentNumbers: uploadedFiles.map((f) => fileNameToInstrumentNo(f.name)),
+                fromOwnerName: selectedMainOwner?.name ?? "—",
+                toOwnerName: selectedToOwner?.name ?? "—",
+                unit_name: saveToUnitLedger && selectedUnit ? selectedUnit.unit_name : undefined,
+                particulars: formData.particulars || undefined,
+                fund_reference: formData.fund_reference || undefined,
+                person_in_charge: formData.person_in_charge || undefined,
+                attachmentsCount: uploadedFiles.length + (voucherFile ? 1 : 0),
+                amount: formData.amount,
+            };
+            const blob = await generateReceiptPDF(receiptData, mode);
+            const url = URL.createObjectURL(blob);
+
+            // Open in a new window and trigger the browser print dialog
+            const printWindow = window.open(url, "_blank");
+            if (printWindow) {
+                printWindow.onload = () => {
+                    printWindow.focus();
+                    printWindow.print();
+                };
+            }
+
+            // Revoke the object URL after a short delay to allow the window to load
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+        } catch (err) {
+            console.error("Failed to generate receipt PDF:", err);
+        } finally {
+            setIsPrinting(false);
         }
     }
 
@@ -884,133 +1077,170 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                 onClose={() => setPreviewFile(null)}
                 zIndex={70}
             />
-            <div className="transaction-grid grid grid-cols-1 gap-6 items-start">
+            <div className="transaction-grid grid grid-cols-1 gap-4 items-start">
 
                 {/* ── LEFT: Main form ── */}
                 <div className="min-w-0">
 
-                    {/* ROW 1: Mode toggles + Voucher Details side-by-side */}
-                    <div className="grid grid-cols-[400px_1fr] gap-6">
+                    {/* ROW 1: Mode toggles + Voucher Details side-by-side (conditionally) */}
+                    <div className="flex flex-col lg:flex-row gap-4 items-start">
                         {/* Mode toggles */}
-                        <SectionCard title="Transaction Mode" icon={<ArrowDownCircle className="w-4 h-4" />}>
-                            <div className="flex flex-col gap-6">
-                                <ToggleGroup<TransactionMode>
-                                    value={mode}
-                                    onChange={handleModeChange}
-                                    options={[
-                                        { value: "DEPOSIT", label: "Deposit", icon: <ArrowDownCircle className="w-4 h-4" /> },
-                                        { value: "WITHDRAWAL", label: "Withdrawal", icon: <ArrowUpCircle className="w-4 h-4" /> },
-                                    ]}
-                                />
-                                <ToggleGroup<VoucherMode>
-                                    value={voucherMode}
-                                    onChange={setVoucherMode}
-                                    options={[
-                                        { value: "WITH_VOUCHER", label: "With Voucher" },
-                                        { value: "NO_VOUCHER", label: "No Voucher" },
-                                    ]}
-                                />
-                            </div>
-                        </SectionCard>
+                        <div className={`transition-all duration-500 ease-in-out w-full shrink-0 ${voucherMode === "WITH_VOUCHER" ? "lg:max-w-[400px]" : "lg:max-w-full"}`}>
+                            <SectionCard title="Transaction Mode" icon={<ArrowDownCircle className="w-4 h-4" />}>
+                                <div className="flex flex-col gap-4">
+                                    <ToggleGroup<TransactionMode>
+                                        value={mode}
+                                        onChange={handleModeChange}
+                                        options={[
+                                            { value: "DEPOSIT", label: "Deposit", icon: <ArrowDownCircle className="w-4 h-4" /> },
+                                            { value: "WITHDRAWAL", label: "Withdrawal", icon: <ArrowUpCircle className="w-4 h-4" /> },
+                                        ]}
+                                    />
+                                    <ToggleGroup<VoucherMode>
+                                        value={voucherMode}
+                                        onChange={setVoucherMode}
+                                        options={[
+                                            { value: "WITH_VOUCHER", label: "With Voucher" },
+                                            { value: "NO_VOUCHER", label: "No Voucher" },
+                                        ]}
+                                    />
+                                </div>
+                            </SectionCard>
+                        </div>
 
                         {/* Voucher Details (conditional) */}
-                        {voucherMode === "WITH_VOUCHER" ? (
-                            <SectionCard title="Voucher Details" icon={<FileText className="w-4 h-4" />}>
-                                <InputField
-                                    label="Voucher Date"
-                                    required
-                                    icon={<Calendar className="w-4 h-4" />}
-                                    error={errors.voucher_date}
-                                    onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.voucher_date; return n; })}
-                                >
-                                    <input
-                                        type="date"
-                                        value={formData.voucher_date}
-                                        max={new Date().toISOString().split("T")[0]}
-                                        onChange={(e) => {
-                                            setFormData((p) => ({ ...p, voucher_date: e.target.value }));
-                                            if (errors.voucher_date && e.target.value)
-                                                setErrors((p) => { const n = { ...p }; delete n.voucher_date; return n; });
-                                        }}
-                                        className={`${inputCls(true, errors.voucher_date)} cursor-pointer`}
-                                    />
-                                </InputField>
-                                <FileDropZone
-                                    label="Voucher Upload *"
-                                    files={voucherFile ? [voucherFile] : []}
-                                    onAdd={addVoucherFile}
-                                    onRemove={() => setVoucherFile(null)}
-                                    multiple={false}
-                                    error={errors.voucherFile}
-                                    onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.voucherFile; return n; })}
-                                />
-                            </SectionCard>
-                        ) : (
-                            /* placeholder so grid stays balanced */
-                            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/40 flex items-center justify-center">
-                                <p className="text-sm text-gray-400 font-medium">No Voucher Mode</p>
+                        <div className={`transition-all duration-500 ease-in-out w-full origin-left overflow-hidden ${voucherMode === "WITH_VOUCHER" ? "lg:flex-1 opacity-100 max-h-[1000px]" : "lg:max-w-0 opacity-0 max-h-0 lg:ml-[-24px] !p-0"}`}>
+                            <div className="min-w-full lg:min-w-[400px]">
+                                <SectionCard title="Voucher Details" icon={<FileText className="w-4 h-4" />}>
+                                    <div id="field-voucher_date">
+                                        <InputField
+                                            label="Voucher Date"
+                                            required
+                                            icon={<Calendar className="w-4 h-4" />}
+                                            error={errors.voucher_date}
+                                            onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.voucher_date; return n; })}
+                                        >
+                                            <input
+                                                type="date"
+                                                value={formData.voucher_date}
+                                                max={new Date().toISOString().split("T")[0]}
+                                                onChange={(e) => {
+                                                    setFormData((p) => ({ ...p, voucher_date: e.target.value }));
+                                                    if (errors.voucher_date && e.target.value)
+                                                        setErrors((p) => { const n = { ...p }; delete n.voucher_date; return n; });
+                                                }}
+                                                className={`${inputCls(true, errors.voucher_date)} cursor-pointer`}
+                                            />
+                                        </InputField>
+                                    </div>{/* /field-voucher_date */}
+                                    <div id="field-voucherFile" className={`relative transition-all duration-300 ${errors.voucherFile ? "pb-12" : ""}`}>
+                                        {isCheckingVoucher && (
+                                            <div className="absolute -top-1 right-0 z-10 flex items-center gap-1.5 text-xs font-semibold text-[#7a0f1f] bg-white px-2 py-0.5 rounded-full shadow-sm border border-[#7a0f1f]/20">
+                                                <span className="w-3 h-3 rounded-full border-2 border-[#7a0f1f] border-t-transparent animate-spin inline-block" />
+                                                Checking…
+                                            </div>
+                                        )}
+                                        <FileDropZone
+                                            label="Voucher Upload *"
+                                            files={voucherFile ? [voucherFile] : []}
+                                            onAdd={addVoucherFile}
+                                            onRemove={() => setVoucherFile(null)}
+                                            multiple={false}
+                                            error={errors.voucherFile}
+                                            onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.voucherFile; return n; })}
+                                        />
+                                    </div>
+                                </SectionCard>
                             </div>
-                        )}
+                        </div>
                     </div>
 
                     {/* 2. Payment Details */}
                     <SectionCard title="Payment Details" icon={<DollarSign className="w-4 h-4" />} className="mt-6">
                         {/* Transaction Type */}
-                        <div className="flex flex-col gap-2">
-                            <label className="text-sm font-semibold text-gray-700 mt-1.5">
+                        <div id="field-transaction_type" className="flex flex-col gap-1.5">
+                            <label className="text-sm font-semibold text-gray-700">
                                 Transaction Type <span className="text-red-500">*</span>
                             </label>
-                            <div className="relative">
-                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10">
-                                    <Tag className="w-4 h-4" />
+
+                            {mode === "WITHDRAWAL" ? (
+                                /* ── Locked: Withdrawal is always CHEQUE ── */
+                                <div className="relative">
+                                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10">
+                                        <Tag className="w-4 h-4" />
+                                    </div>
+                                    <div className={`w-full h-10 rounded-lg border text-sm font-semibold bg-gray-50 pl-10 pr-10 flex items-center uppercase tracking-wide select-none border-gray-200 text-gray-500 cursor-not-allowed`}>
+                                        CHEQUE
+                                    </div>
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-gray-400">
+                                        <Lock className="w-3.5 h-3.5" />
+                                    </div>
                                 </div>
-                                <select
-                                    value={formData.transaction_type}
-                                    onChange={(e) => handleTypeChange(e.target.value as TransactionType)}
-                                    className={`w-full h-10 rounded-lg border text-sm font-semibold text-gray-900 bg-white pl-10 pr-8 appearance-none cursor-pointer focus:outline-none transition-all uppercase tracking-wide ${errors.transaction_type
-                                        ? "border-red-400 focus:border-red-400 focus:ring-2 focus:ring-red-400/20"
-                                        : "border-gray-300 focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20"
-                                        }`}
-                                >
-                                    {transactionTypeOptions.map((t) => (
-                                        <option key={t} value={t}>{t}</option>
-                                    ))}
-                                </select>
-                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            </div>
+                            ) : (
+                                /* ── Normal dropdown for DEPOSIT ── */
+                                <div className="relative">
+                                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10">
+                                        <Tag className="w-4 h-4" />
+                                    </div>
+                                    <select
+                                        value={formData.transaction_type}
+                                        onChange={(e) => handleTypeChange(e.target.value as TransactionType)}
+                                        className={`w-full h-10 rounded-lg border text-sm font-semibold text-gray-900 bg-white pl-10 pr-8 appearance-none cursor-pointer focus:outline-none transition-all uppercase tracking-wide ${errors.transaction_type
+                                            ? "border-red-400 focus:border-red-400 focus:ring-2 focus:ring-red-400/20"
+                                            : "border-gray-300 focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20"
+                                            }`}
+                                    >
+                                        {transactionTypeOptions.map((t) => (
+                                            <option key={t} value={t}>{t}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                </div>
+                            )}
+
                             {errors.transaction_type && <FormTooltipError message={errors.transaction_type} onClose={() => setErrors((p) => { const n = { ...p }; delete n.transaction_type; return n; })} />}
                         </div>
 
-                        {/* Cheque upload — only for CHEQUE */}
-                        {requiresFileUpload && (
-                            <FileDropZone
-                                label="Cheque Upload"
-                                files={uploadedFiles}
-                                onAdd={addFiles}
-                                onRemove={removeFile}
-                                error={errors.uploadedFiles}
-                                onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.uploadedFiles; return n; })}
-                            />
+                        {/* Cheque upload — always in WITHDRAWAL, also for CHEQUE type in DEPOSIT */}
+                        {(mode === "WITHDRAWAL" || requiresFileUpload) && (
+                            <div id="field-uploadedFiles" className="relative">
+                                {isCheckingCheque && (
+                                    <div className="absolute -top-1 right-0 z-10 flex items-center gap-1.5 text-xs font-semibold text-[#7a0f1f] bg-white px-2 py-0.5 rounded-full shadow-sm border border-[#7a0f1f]/20">
+                                        <span className="w-3 h-3 rounded-full border-2 border-[#7a0f1f] border-t-transparent animate-spin inline-block" />
+                                        Checking…
+                                    </div>
+                                )}
+                                <FileDropZone
+                                    label="Cheque Upload"
+                                    files={uploadedFiles}
+                                    onAdd={addFiles}
+                                    onRemove={removeFile}
+                                    error={errors.uploadedFiles}
+                                    onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.uploadedFiles; return n; })}
+                                />
+                            </div>
                         )}
 
                         {/* Main Owner */}
-                        <OwnerDropdown
-                            label="Main Owner"
-                            required
-                            placeholder="Select main owner…"
-                            owners={owners}
-                            loading={ownersLoading}
-                            selectedOwner={selectedMainOwner}
-                            onSelect={(o) => {
-                                setSelectedMainOwner(o);
-                                setFormData((p) => ({ ...p, from_owner_id: o?.id ?? null }));
-                                if (errors.from_owner_id) setErrors((p) => { const n = { ...p }; delete n.from_owner_id; return n; });
-                            }}
-                            filterFn={(o) => o.owner_type === "MAIN" && o.status === "ACTIVE"}
-                            icon={<Building2 className="w-4 h-4" />}
-                            error={errors.from_owner_id}
-                            onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.from_owner_id; return n; })}
-                        />
+                        <div id="field-from_owner_id">
+                            <OwnerDropdown
+                                label="Main Owner"
+                                required
+                                placeholder="Select main owner…"
+                                owners={owners}
+                                loading={ownersLoading}
+                                selectedOwner={selectedMainOwner}
+                                onSelect={(o) => {
+                                    setSelectedMainOwner(o);
+                                    setFormData((p) => ({ ...p, from_owner_id: o?.id ?? null }));
+                                    if (errors.from_owner_id) setErrors((p) => { const n = { ...p }; delete n.from_owner_id; return n; });
+                                }}
+                                filterFn={(o) => o.owner_type === "MAIN" && o.status === "ACTIVE"}
+                                icon={<Building2 className="w-4 h-4" />}
+                                error={errors.from_owner_id}
+                                onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.from_owner_id; return n; })}
+                            />
+                        </div>
 
                         {/* Balance info / warning */}
                         {mode === "WITHDRAWAL" && selectedMainOwner && (
@@ -1060,26 +1290,28 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                         )}
 
                         {/* Owner */}
-                        <OwnerDropdown
-                            label="Owner"
-                            required
-                            placeholder="Select owner…"
-                            owners={owners}
-                            loading={ownersLoading}
-                            selectedOwner={selectedToOwner}
-                            onSelect={(o) => {
-                                setSelectedToOwner(o);
-                                setFormData((p) => ({ ...p, to_owner_id: o?.id ?? null, unit_id: null }));
-                                setSelectedUnit(null);
-                                setSaveToUnitLedger(false);
-                                if (errors.to_owner_id) setErrors((p) => { const n = { ...p }; delete n.to_owner_id; return n; });
-                            }}
-                            filterFn={(o) => o.owner_type !== "SYSTEM" && o.owner_type !== "MAIN"}
-                            icon={<User className="w-4 h-4" />}
-                            error={errors.to_owner_id}
-                            onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.to_owner_id; return n; })}
-                            onCreateNew={(q) => { setCreateOwnerName(q); setShowOwnerPanel(true); }}
-                        />
+                        <div id="field-to_owner_id">
+                            <OwnerDropdown
+                                label="Owner"
+                                required
+                                placeholder="Select owner…"
+                                owners={owners}
+                                loading={ownersLoading}
+                                selectedOwner={selectedToOwner}
+                                onSelect={(o) => {
+                                    setSelectedToOwner(o);
+                                    setFormData((p) => ({ ...p, to_owner_id: o?.id ?? null, unit_id: null }));
+                                    setSelectedUnit(null);
+                                    setSaveToUnitLedger(false);
+                                    if (errors.to_owner_id) setErrors((p) => { const n = { ...p }; delete n.to_owner_id; return n; });
+                                }}
+                                filterFn={(o) => o.owner_type !== "SYSTEM" && o.owner_type !== "MAIN"}
+                                icon={<User className="w-4 h-4" />}
+                                error={errors.to_owner_id}
+                                onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.to_owner_id; return n; })}
+                                onCreateNew={(q) => { setCreateOwnerName(q); setShowOwnerPanel(true); }}
+                            />
+                        </div>
                     </SectionCard>
 
                     {/* 3. Unit Section (conditional) */}
@@ -1100,7 +1332,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                             </button>
 
                             <div ref={unitDropdownRef} className="relative flex flex-col gap-2">
-                                <label className="text-sm font-semibold text-gray-700 mt-1.5">Unit <span className="text-red-500">*</span></label>
+                                <label className="text-sm font-semibold text-gray-700">Unit <span className="text-red-500">*</span></label>
                                 <div
                                     className={`flex items-center h-10 rounded-lg border bg-white cursor-pointer transition-all ${errors.unit_id ? "border-red-400" : "border-gray-300 hover:border-gray-400"
                                         }`}
@@ -1162,8 +1394,8 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                     {/* 4. Amount & Details */}
                     <SectionCard title="Amount & Details" icon={<DollarSign className="w-4 h-4" />} className="mt-6">
                         {/* Amount */}
-                        <div className="flex flex-col gap-2">
-                            <label className="text-sm font-semibold text-gray-700 mt-1.5">Amount <span className="text-red-500">*</span></label>
+                        <div id="field-amount" className="flex flex-col gap-1.5">
+                            <label className="text-sm font-semibold text-gray-700">Amount <span className="text-red-500">*</span></label>
                             <div className="relative flex items-center h-10 rounded-lg border bg-white focus-within:ring-2 transition-all overflow-hidden text-sm focus-within:border-[#7B0F2B] focus-within:ring-[#7B0F2B]/20 border-gray-300">
                                 <div className="flex h-full items-center px-3 bg-gray-50 border-r border-gray-200 text-[#800020] font-bold select-none">₱</div>
                                 <input
@@ -1185,29 +1417,31 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                         </div>
 
                         {/* Particulars */}
-                        <InputField
-                            label="Particulars"
-                            required
-                            icon={<AlignLeft className="w-4 h-4" />}
-                            error={errors.particulars}
-                            onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.particulars; return n; })}
-                        >
-                            <textarea
-                                value={formData.particulars}
-                                onChange={(e) => {
-                                    setFormData((p) => ({ ...p, particulars: e.target.value }));
-                                    if (errors.particulars && e.target.value.trim()) setErrors((p) => { const n = { ...p }; delete n.particulars; return n; });
-                                }}
-                                placeholder="Transaction description…"
-                                rows={3}
-                                maxLength={500}
-                                className={`w-full rounded-lg border text-sm text-gray-900 bg-white pl-10 pr-3 py-2 resize-none focus:outline-none transition-all ${errors.particulars
-                                    ? "border-red-400 focus:border-red-400 focus:ring-2 focus:ring-red-400/20"
-                                    : "border-gray-300 focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20"
-                                    }`}
-                            />
-                            <span className="block text-right text-xs text-gray-400 mt-1">{formData.particulars.length}/500</span>
-                        </InputField>
+                        <div id="field-particulars">
+                            <InputField
+                                label="Particulars"
+                                required
+                                icon={<AlignLeft className="w-4 h-4" />}
+                                error={errors.particulars}
+                                onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.particulars; return n; })}
+                                characterCount={`${formData.particulars.length}/500`}
+                            >
+                                <textarea
+                                    value={formData.particulars}
+                                    onChange={(e) => {
+                                        setFormData((p) => ({ ...p, particulars: e.target.value }));
+                                        if (errors.particulars && e.target.value.trim()) setErrors((p) => { const n = { ...p }; delete n.particulars; return n; });
+                                    }}
+                                    placeholder="Transaction description…"
+                                    rows={3}
+                                    maxLength={500}
+                                    className={`w-full rounded-lg border text-sm text-gray-900 bg-white pl-10 pr-3 py-2 resize-none focus:outline-none transition-all ${errors.particulars
+                                        ? "border-red-400 focus:border-red-400 focus:ring-2 focus:ring-red-400/20"
+                                        : "border-gray-300 focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20"
+                                        }`}
+                                />
+                            </InputField>
+                        </div>{/* /field-particulars */}
 
                         {/* Fund Reference */}
                         <InputField
@@ -1215,6 +1449,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                             icon={<Tag className="w-4 h-4" />}
                             error={errors.fund_reference}
                             onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.fund_reference; return n; })}
+                            characterCount={`${formData.fund_reference.length}/50`}
                         >
                             <input
                                 type="text"
@@ -1227,7 +1462,6 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                                 placeholder="Optional"
                                 className={inputCls(true, errors.fund_reference)}
                             />
-                            <span className="block text-right text-xs text-gray-400 mt-1">{formData.fund_reference.length}/50</span>
                         </InputField>
 
                         {/* Person in Charge */}
@@ -1236,6 +1470,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                             icon={<UserCheck className="w-4 h-4" />}
                             error={errors.person_in_charge}
                             onCloseError={() => setErrors((p) => { const n = { ...p }; delete n.person_in_charge; return n; })}
+                            characterCount={`${formData.person_in_charge.length}/100`}
                         >
                             <input
                                 type="text"
@@ -1248,14 +1483,13 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                                 placeholder="Optional"
                                 className={inputCls(true, errors.person_in_charge)}
                             />
-                            <span className="block text-right text-xs text-gray-400 mt-1">{formData.person_in_charge.length}/100</span>
                         </InputField>
                     </SectionCard>
 
                 </div>{/* end LEFT */}
 
                 {/* ── RIGHT: Attachments + Summary ── */}
-                <div className="flex flex-col gap-6 w-full h-full pb-8">
+                <div className="flex flex-col gap-4 w-full pb-8 sticky top-6 self-start">
 
                     {/* Uploaded Attachments Section - Inspiration layout */}
                     {shouldShowAttachments && (uploadedFiles.length > 0 || voucherFile) && (
@@ -1269,7 +1503,7 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                                 </span>
                             </div>
 
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 {/* Voucher File */}
                                 {voucherFile && (
                                     <>
@@ -1376,11 +1610,27 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                     )}
 
                     {/* Transaction Summary - Original header, inspiration content layout */}
-                    <div className="rounded-lg border overflow-hidden shadow-lg bg-white w-full" style={{ borderColor: BORDER }}>
-                        <div className="lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto" style={{ scrollbarWidth: "thin", scrollbarColor: "#cbd5e1 #f1f1f1" }}>
+                    <div className="rounded-lg border shadow-lg bg-white w-full flex flex-col lg:max-h-[calc(100vh-6rem)]" style={{ borderColor: BORDER }}>
+                        <div className="flex-1 overflow-y-auto rounded-t-lg" style={{ scrollbarWidth: "thin", scrollbarColor: "#cbd5e1 #f1f1f1" }}>
                             {/* Header - Original layout (amount, badges) */}
                             <div className="px-6 py-6 text-white" style={{ background: "linear-gradient(135deg, #7a0f1f, #a4163a)" }}>
-                                <p className="text-xs font-bold uppercase tracking-widest text-white/70 mb-2">Transaction Summary</p>
+                                <div className="flex items-start justify-between gap-2">
+                                    <p className="text-xs font-bold uppercase tracking-widest text-white/70 mb-2">Transaction Summary</p>
+                                    <button
+                                        type="button"
+                                        onClick={handlePrint}
+                                        disabled={isPrinting}
+                                        title="Download Receipt PDF"
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/15 hover:bg-white/25 text-white/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                                    >
+                                        {isPrinting ? (
+                                            <span className="w-3.5 h-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin inline-block" />
+                                        ) : (
+                                            <Printer className="w-3.5 h-3.5" />
+                                        )}
+                                        {isPrinting ? "Generating…" : "Print"}
+                                    </button>
+                                </div>
                                 <p className="text-3xl font-bold mb-3">
                                     ₱{amountNum > 0 ? amountNum.toLocaleString("en-PH", { minimumFractionDigits: 2 }) : "0.00"}
                                 </p>
@@ -1409,14 +1659,24 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                                     </div>
 
                                     {/* Voucher Information */}
-                                    {voucherMode === "WITH_VOUCHER" && formData.voucher_date && (
+                                    {voucherMode === "WITH_VOUCHER" && (formData.voucher_date || voucherFile) && (
                                         <div className="space-y-2 pb-3 border-b" style={{ borderColor: BORDER }}>
-                                            <div className="flex items-start justify-between gap-2">
-                                                <span className="text-xs text-gray-600 shrink-0">Voucher Date</span>
-                                                <span className="text-sm font-medium text-gray-900 text-right break-words whitespace-normal min-w-0 max-w-[65%]">
-                                                    {formatDate(formData.voucher_date)}
-                                                </span>
-                                            </div>
+                                            {voucherFile && (
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <span className="text-xs text-gray-600 shrink-0">Voucher No.</span>
+                                                    <span className="text-sm font-semibold text-gray-900 text-right break-words whitespace-normal min-w-0 max-w-[65%]">
+                                                        {fileNameToInstrumentNo(voucherFile.name)}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {formData.voucher_date && (
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <span className="text-xs text-gray-600 shrink-0">Voucher Date</span>
+                                                    <span className="text-sm font-medium text-gray-900 text-right break-words whitespace-normal min-w-0 max-w-[65%]">
+                                                        {formatDate(formData.voucher_date)}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
@@ -1546,23 +1806,23 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                                     </p>
                                 </div>
                             )}
+                        </div>
 
-                            {/* Actions */}
-                            <div className="px-6 pb-6 pt-2 space-y-3">
-                                <button
-                                    type="button"
-                                    onClick={handleSubmit}
-                                    disabled={isSubmitting}
-                                    className="w-full h-11 rounded-lg font-semibold text-sm text-white shadow transition-opacity hover:opacity-90 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                    style={{ background: ACCENT }}
-                                >
-                                    <SendHorizonal className="w-4 h-4" />
-                                    {mode === "DEPOSIT" ? "Submit Deposit" : "Submit Withdrawal"}
-                                </button>
-                                <button type="button" onClick={handleReset} className="w-full h-10 rounded-lg text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors">
-                                    Reset Form
-                                </button>
-                            </div>
+                        {/* Actions (Docked at the bottom) */}
+                        <div className="px-5 py-4 bg-white border-t rounded-b-lg flex gap-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 shrink-0" style={{ borderColor: BORDER }}>
+                            <button type="button" onClick={() => setShowResetConfirm(true)} className="h-11 px-4 rounded-lg text-sm font-medium text-gray-600 border hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0" style={{ borderColor: BORDER }}>
+                                Reset Form
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSubmit}
+                                disabled={isSubmitting}
+                                className="flex-1 h-11 rounded-lg font-semibold text-sm text-white shadow transition-opacity hover:opacity-90 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                style={{ background: ACCENT }}
+                            >
+                                <SendHorizonal className="w-4 h-4" />
+                                {mode === "DEPOSIT" ? "Submit Deposit" : "Submit Withdrawal"}
+                            </button>
                         </div>
                     </div>
 
@@ -1596,6 +1856,26 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                 }}
             />
 
+            {/* ── Reset Confirmation Modal ── */}
+            <ConfirmationModal
+                open={showResetConfirm}
+                icon={RefreshCw}
+                color="#6b7280"
+                title="Reset Form"
+                message={
+                    <>
+                        Are you sure you want to <strong>reset the form</strong>?
+                        <br />
+                        <span className="text-xs text-gray-500 mt-1 block">All entered data and uploaded files will be cleared.</span>
+                    </>
+                }
+                confirmLabel="Yes, Reset"
+                cancelLabel="Go Back"
+                onCancel={() => setShowResetConfirm(false)}
+                onConfirm={() => { setShowResetConfirm(false); handleReset(); }}
+                zIndex={110}
+            />
+
             {/* ── Confirmation Modal ── */}
             <ConfirmationModal
                 open={showConfirm}
@@ -1627,6 +1907,13 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                 title={mode === "DEPOSIT" ? "Submitting Deposit" : "Submitting Withdrawal"}
                 message="Please wait while your transaction is being processed…"
                 zIndex={120}
+            />
+            {/* ── Transaction Success Panel ── */}
+            <TransactionSuccessPanel
+                open={showSuccessPanel}
+                transactionData={successPanelData}
+                transactionType={successPanelMode}
+                onClose={() => setShowSuccessPanel(false)}
             />
         </>
     );

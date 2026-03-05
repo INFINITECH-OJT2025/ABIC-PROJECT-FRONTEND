@@ -48,6 +48,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@fontsource/inter": "^5.2.8",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

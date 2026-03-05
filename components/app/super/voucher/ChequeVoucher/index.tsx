@@ -156,9 +156,10 @@ export default function PrintableView() {
           </div>
         </div>
 
-        <div className="max-w-[1600px] mx-auto px-6 space-y-10 py-8">
+        {/* <div className="max-w-[1600px] mx-auto px-6 space-y-10 py-8"> */}
+        <div className="w-full px-8 py-8">
           {/* FORM SECTION (Row 1) */}
-          <FormSection formData={formData} onInputChange={handleInputChange} onClearForm={requestClearForm} />
+          <FormSection formData={formData} onInputChange={handleInputChange} onSuccessClear={confirmClearForm} />
 
           {/* PREVIEW SECTION (Row 2) */}
           <PreviewSection formData={formData} />

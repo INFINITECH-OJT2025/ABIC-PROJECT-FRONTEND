@@ -17,7 +17,7 @@ export async function GET(req: Request) {
     if (ownerId) {
       url.searchParams.append("owner_id", ownerId);
     }
-    if (unitId) {
+    if (unitId && unitId !== "ALL") {
       url.searchParams.append("unit_id", unitId);
     }
     if (sort) {
