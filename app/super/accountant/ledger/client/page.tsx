@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import {
     Building2,
     ChevronDown,
@@ -10,6 +10,8 @@ import {
     Search,
     FileText
 } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+
 
 import AppHeader from "@/components/app/AppHeader";
 import DataTableLedge, { InstrumentFilesPopover } from "@/components/app/DataTableLedge";
@@ -222,7 +224,7 @@ function UnitSelectDropdown({
     );
 }
 
-export default function ClientLedgerPage() {
+function ClientLedgerPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const highlightTx = searchParams.get("highlightTx");
@@ -617,5 +619,13 @@ export default function ClientLedgerPage() {
                 </section>
             </div>
         </div>
+    );
+}
+
+export default function ClientLedgerPageWrapper() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-gray-50/50" />}>
+            <ClientLedgerPage />
+        </Suspense>
     );
 }

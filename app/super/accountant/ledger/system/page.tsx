@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, Suspense } from "react";
 import {
     Download,
     Eye,
@@ -43,7 +43,7 @@ interface LedgerEntry {
 
 const BORDER = "rgba(0,0,0,0.12)";
 
-export default function SystemLedgerPage() {
+function SystemLedgerPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const highlightTx = searchParams.get("highlightTx");
@@ -369,5 +369,13 @@ export default function SystemLedgerPage() {
                 </section>
             </div>
         </div>
+    );
+}
+
+export default function SystemLedgerPageWrapper() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-gray-50/50" />}>
+            <SystemLedgerPage />
+        </Suspense>
     );
 }

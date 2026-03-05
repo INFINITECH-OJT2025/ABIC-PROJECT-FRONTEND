@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import {
     ArrowDownCircle,
     ArrowUpCircle,
@@ -229,7 +229,12 @@ function UnitSelectDropdown({
     );
 }
 
-export default function MainLedgerPage() {
+function MainLedgerPage() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const highlightTx = searchParams.get("highlightTx");
+    const initialOwnerId = searchParams.get('owner_id');
+
     // Component State
     const [owners, setOwners] = useState<Owner[]>([]);
     const [ownersLoading, setOwnersLoading] = useState(true);
@@ -256,7 +261,7 @@ export default function MainLedgerPage() {
                     const mains = rawData.filter((o: Owner) => o.owner_type === "MAIN");
                     setOwners(mains);
                     if (initialOwnerId) {
-                        const exists = mains.find(o => String(o.id) === initialOwnerId);
+                        const exists = mains.find((o: Owner) => String(o.id) === initialOwnerId);
                         if (exists) setSelectedOwnerId(initialOwnerId);
                         else if (mains.length > 0) setSelectedOwnerId(mains[0].id);
                     } else if (mains.length > 0) {
@@ -566,10 +571,29 @@ export default function MainLedgerPage() {
                             onPageChange={setCurrentPage}
                             itemName="entries"
                             loading={entriesLoading}
+                            getRowId={(row) => `row-${row.transactionId}`}
+                            highlightRowId={highlightTx ? `row-${highlightTx}` : undefined}
+                            onRowClick={(row) => {
+                                if (!row.otherOwnerType || !row.otherOwnerId) return;
+                                const destinationLedgerType = row.otherOwnerType.toLowerCase();
+                                let targetUrl = `/super/accountant/ledger/${destinationLedgerType}?targetOwnerId=${row.otherOwnerId}&highlightTx=${row.transactionId}`;
+                                if (row.otherUnitId) {
+                                    targetUrl += `&targetUnitId=${row.otherUnitId}`;
+                                }
+                                router.push(targetUrl);
+                            }}
                         />
                     </div>
                 </section>
             </div>
         </div>
+    );
+}
+
+export default function MainLedgerPageWrapper() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-gray-50/50" />}>
+            <MainLedgerPage />
+        </Suspense>
     );
 }
