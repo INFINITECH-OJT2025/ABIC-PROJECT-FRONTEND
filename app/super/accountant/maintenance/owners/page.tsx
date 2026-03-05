@@ -380,7 +380,7 @@ export default function OwnersPage() {
             <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8">
                 <section
                     className="rounded-md bg-white p-5 shadow-sm border"
-                    style={{ borderColor: BORDER }}
+                        style={{ borderColor: BORDER }}
                 >
                     {/* ── Section header ── */}
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
