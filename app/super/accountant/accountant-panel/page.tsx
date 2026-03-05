@@ -27,25 +27,43 @@ export interface WeeklyActivity {
     withdraw_amount: number
 }
 
-export interface VoucherStatusCount {
-    approved: number
-    cancelled: number
+export interface OwnerRanking {
+    owner_name: string
+    amount: number
 }
 
-export interface RecentVoucher {
+export interface OwnerRankingCount {
+    owner_name: string
+    count: number
+}
+
+export interface LargestTransaction {
     id: number
-    no: string
-    type: "Cash" | "Cheque"
+    method: "DEPOSIT" | "WITHDRAWAL"
+    owner_name: string
+    amount: number
     date: string
-    payee: string
-    amount: string
-    status: StatusType
 }
 
 export interface DashboardDataPayload {
     kpi: DashboardKPI
     weekly_activity: WeeklyActivity[]
-    voucher_status: VoucherStatusCount
+    owners_ranking: {
+        depositors: OwnerRanking[]
+        withdrawers: OwnerRanking[]
+    }
+    transaction_frequency: {
+        all: OwnerRankingCount[]
+        depositors: OwnerRankingCount[]
+        withdrawers: OwnerRankingCount[]
+    }
+    largest_transactions: LargestTransaction[]
+    payment_methods: {
+        cash_deposit: number
+        cheque_deposit: number
+        bank_transfer: number
+        cheque: number
+    }
     recent_vouchers: RecentVoucher[]
 }
 
@@ -85,12 +103,6 @@ const RECENT_ACTIVITIES = [
     { icon: AlertCircle, title: "Pending cheque CHV-2026-042", time: "5 hours ago", color: "text-amber-600", bg: "bg-amber-50" },
     { icon: Wallet, title: "Transaction deposit ₱62,000", time: "1 day ago", color: "text-violet-600", bg: "bg-violet-50" },
     { icon: CheckCircle2, title: "Voucher CV-2026-002 approved", time: "1 day ago", color: "text-emerald-600", bg: "bg-emerald-50" },
-]
-
-const DONUT_SEGMENTS = [
-    { label: "Approved", pct: 45, color: "#7B0F2B", count: 469 },
-    { label: "Pending", pct: 30, color: "#A4163A", count: 312 },
-    { label: "Draft", pct: 25, color: "#D4A0AD", count: 261 },
 ]
 
 const BORDER = "rgba(0,0,0,0.08)"
@@ -143,6 +155,9 @@ export default function AccountantPanelPage() {
     // Data State
     const [dashboardData, setDashboardData] = useState<DashboardDataPayload | null>(null)
     const [chartType, setChartType] = useState<"bar" | "line">("bar")
+    const [timeframe, setTimeframe] = useState<"daily" | "weekly" | "monthly">("daily")
+    const [rankingTab, setRankingTab] = useState<"depositors" | "withdrawers">("depositors")
+    const [freqTab, setFreqTab] = useState<"all" | "depositors" | "withdrawers">("all")
 
     const [searchQuery, setSearchQuery] = useState("")
     const [statusFilter, setStatusFilter] = useState<"All" | StatusType>("All")
@@ -155,7 +170,7 @@ export default function AccountantPanelPage() {
 
         async function fetchDashboardData() {
             try {
-                const response = await fetch('/api/head/accountant/dashboard-stats');
+                const response = await fetch(`/api/head/accountant/dashboard-stats?timeframe=${timeframe}`);
 
                 if (!response.ok) {
                     throw new Error(`Error: ${response.status}`);
@@ -176,7 +191,7 @@ export default function AccountantPanelPage() {
         }
 
         fetchDashboardData()
-    }, [])
+    }, [timeframe])
 
     // Animated KPI numbers
     const totalVouchers = useAnimatedNumber(dashboardData?.kpi.total_vouchers || 0)
@@ -203,34 +218,6 @@ export default function AccountantPanelPage() {
     // Reset to page 1 on filter change
     useEffect(() => { setTablePage(1) }, [searchQuery, statusFilter])
 
-    // Compute Donut Segments from State
-    const computedDonutSegments = useMemo(() => {
-        const stats = dashboardData?.voucher_status || { approved: 0, cancelled: 0 }
-        const total = stats.approved + stats.cancelled
-        if (total === 0) return []
-
-        return [
-            { label: "Approved", pct: Math.round((stats.approved / total) * 100), color: "#7B0F2B", count: stats.approved },
-            { label: "Cancelled", pct: Math.round((stats.cancelled / total) * 100), color: "#A4163A", count: stats.cancelled },
-        ]
-    }, [dashboardData])
-
-    // Donut conic-gradient string
-    const donutGradient = useMemo(() => {
-        if (!computedDonutSegments.length) return "transparent"
-        let acc = 0
-        const stops = computedDonutSegments.map(s => {
-            const start = acc
-            acc += s.pct
-            return `${s.color} ${start}% ${acc}%`
-        })
-        return `conic-gradient(${stops.join(", ")})`
-    }, [computedDonutSegments])
-
-    const displayedTotalVouchers = dashboardData ?
-        (dashboardData.voucher_status.approved + dashboardData.voucher_status.cancelled)
-        : 0
-
     const totalWeeklyNet = dashboardData ?
         dashboardData.weekly_activity.reduce((acc, curr) => acc + curr.amount, 0)
         : 0
@@ -242,7 +229,7 @@ export default function AccountantPanelPage() {
                 subtitle="Accountant panel summary and key metrics"
             />
 
-            <div className="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+            <div className="flex-1 w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
                 {/* ── KPI Cards ─────────────────────────────────────────────── */}
                 <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 transition-opacity duration-1000 ${isLoading ? 'opacity-50 blur-sm pointer-events-none' : 'opacity-100'}`}>
@@ -252,7 +239,7 @@ export default function AccountantPanelPage() {
                         return (
                             <div
                                 key={i}
-                                className="relative rounded-[20px] bg-white border shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] transition-all duration-300 overflow-hidden"
+                                className="relative rounded-lg bg-white border shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] transition-all duration-300 overflow-hidden"
                                 style={{
                                     borderColor: "rgba(0,0,0,0.12)",
                                     opacity: mounted ? 1 : 0,
@@ -311,9 +298,14 @@ export default function AccountantPanelPage() {
                         <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-8 gap-4">
                             <div>
                                 <h3 className="text-xl font-black text-[#2D040C] tracking-tight">Transaction Activity</h3>
-                                <div className="flex items-center gap-3 mt-1.5">
-                                    <p className="text-[13px] text-gray-500 font-medium">Daily volume this week</p>
-                                    <div className="flex items-center bg-gray-100/80 p-0.5 rounded-lg border border-gray-200">
+                                <div className="flex items-center gap-3 mt-2 flex-wrap sm:flex-nowrap">
+                                    <div className="flex items-center gap-1 bg-gray-100/80 p-0.5 rounded-xl shadow-inner border border-gray-200 shrink-0">
+                                        <button onClick={() => setTimeframe("daily")} className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all duration-300 ${timeframe === "daily" ? "bg-white text-[#2D040C] shadow-sm ring-1 ring-gray-900/10" : "text-gray-400 hover:text-gray-600"} pointer-events-auto cursor-pointer`}>Daily</button>
+                                        <button onClick={() => setTimeframe("weekly")} className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all duration-300 ${timeframe === "weekly" ? "bg-white text-[#2D040C] shadow-sm ring-1 ring-gray-900/10" : "text-gray-400 hover:text-gray-600"} pointer-events-auto cursor-pointer`}>Weekly</button>
+                                        <button onClick={() => setTimeframe("monthly")} className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all duration-300 ${timeframe === "monthly" ? "bg-white text-[#2D040C] shadow-sm ring-1 ring-gray-900/10" : "text-gray-400 hover:text-gray-600"} pointer-events-auto cursor-pointer`}>Monthly</button>
+                                    </div>
+                                    <div className="w-px h-4 bg-gray-200 hidden sm:block shrink-0"></div>
+                                    <div className="flex items-center shrink-0 bg-gray-100/80 p-0.5 rounded-lg border border-gray-200">
                                         <button
                                             onClick={() => setChartType("bar")}
                                             className={`p-1 rounded-md transition-all duration-200 ${chartType === "bar" ? "bg-white shadow-sm text-[#7B0F2B]" : "text-gray-400 hover:text-gray-600"}`}
@@ -396,7 +388,7 @@ export default function AccountantPanelPage() {
                                                             className="opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 ease-out origin-bottom"
                                                         >
                                                             <div
-                                                                className="relative text-white rounded-xl px-4 py-3 whitespace-nowrap min-w-[150px]"
+                                                                className="relative text-white rounded-md px-4 py-3 whitespace-nowrap min-w-[150px]"
                                                                 style={{
                                                                     backgroundColor: "#5f0c18",
                                                                     boxShadow: "0 12px 36px rgba(95,12,24,0.35), 0 4px 12px rgba(0,0,0,0.12)"
@@ -579,6 +571,25 @@ export default function AccountantPanelPage() {
                                         </div>
                                     ))}
                                 </div>
+
+                                {/* Bottom Context Footer */}
+                                <div className="mt-8 pt-6 border-t border-dashed border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4 px-1 sm:px-4">
+                                    <div className="flex items-center gap-6">
+                                        <div className="flex items-center gap-2 group cursor-default">
+                                            <div className="w-3 h-3 rounded-[3px] bg-gradient-to-br from-[#10b981] to-[#047857] shadow-sm group-hover:scale-110 transition-transform" />
+                                            <span className="text-[13px] font-semibold text-gray-400 group-hover:text-gray-600 transition-colors">Inbound (Deposits)</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 group cursor-default">
+                                            <div className="w-3 h-3 rounded-[3px] bg-gradient-to-br from-[#f43f5e] to-[#be123c] shadow-sm group-hover:scale-110 transition-transform" />
+                                            <span className="text-[13px] font-semibold text-gray-400 group-hover:text-gray-600 transition-colors">Outbound (Withdrawals)</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 text-[12px] font-medium text-gray-400 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
+                                        <Clock size={14} className="text-gray-400" />
+                                        <span>Data synced to latest activity</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -598,69 +609,320 @@ export default function AccountantPanelPage() {
                         >
                             <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-[#7B0F2B]/[0.03] to-transparent rounded-bl-full pointer-events-none" />
 
-                            <div className="relative z-10 flex flex-col sm:flex-row sm:items-start justify-between mb-8 gap-4">
-                                <div>
-                                    <h3 className="text-xl font-black text-[#2D040C] tracking-tight">Vouchers by Status</h3>
-                                    <p className="text-[13px] text-gray-500 font-medium mt-1">Distribution overview</p>
-                                </div>
-                                <div className="hidden sm:flex items-center justify-center w-10 h-10 rounded-[14px] bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-200/60 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)]">
-                                    <Receipt size={18} className="text-gray-400 drop-shadow-sm" />
+                            <div className="relative z-10 flex flex-col justify-between mb-8 gap-1">
+                                <h3 className="text-xl font-black text-[#2D040C] tracking-tight">Top Owners Overview</h3>
+                                <p className="text-[13px] text-gray-500 font-medium">Rankings by aggregate volume</p>
+
+                                {/* Tabs */}
+                                <div className="flex items-center gap-1 bg-gray-100/80 p-1 rounded-xl w-full sm:w-fit mt-4 border border-gray-200 shadow-inner">
+                                    <button
+                                        onClick={() => setRankingTab("depositors")}
+                                        className={`flex-1 sm:flex-none px-4 py-1.5 text-[13px] font-bold rounded-lg transition-all duration-300 pointer-events-auto cursor-pointer ${rankingTab === "depositors" ? "bg-white text-[#10b981] shadow-sm ring-1 ring-gray-900/5" : "text-gray-500 hover:text-gray-700"}`}
+                                    >
+                                        Deposits
+                                    </button>
+                                    <button
+                                        onClick={() => setRankingTab("withdrawers")}
+                                        className={`flex-1 sm:flex-none px-4 py-1.5 text-[13px] font-bold rounded-lg transition-all duration-300 pointer-events-auto cursor-pointer ${rankingTab === "withdrawers" ? "bg-white text-[#f43f5e] shadow-sm ring-1 ring-gray-900/5" : "text-gray-500 hover:text-gray-700"}`}
+                                    >
+                                        Withdrawals
+                                    </button>
                                 </div>
                             </div>
 
-                            <div className="relative z-10 flex-1 flex flex-col items-center justify-center gap-8">
-                                {/* Donut */}
-                                <div className="relative flex justify-center w-full group/donut">
-                                    <div className="absolute inset-0 m-auto w-[140px] h-[140px] bg-gradient-to-tr from-[#7B0F2B]/20 to-[#A4163A]/20 rounded-full blur-2xl transition-all duration-700 group-hover/donut:blur-3xl" />
-                                    <div
-                                        className="relative rounded-full flex items-center justify-center shrink-0 transition-transform duration-700 group-hover/donut:scale-105"
-                                        style={{
-                                            width: 170,
-                                            height: 170,
-                                            minWidth: 170,
-                                            minHeight: 170,
-                                            aspectRatio: "1 / 1",
-                                            background: donutGradient,
-                                            boxShadow: "0 0 0 8px rgba(255,255,255,0.7), 0 16px 40px rgba(123,15,43,0.12)"
-                                        }}
-                                    >
-                                        <div
-                                            className="absolute bg-white rounded-full flex flex-col items-center justify-center transition-all duration-700"
-                                            style={{ width: 100, height: 100, boxShadow: "inset 0 2px 10px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.02)" }}
-                                        >
-                                            <span className="text-2xl font-black text-[#2D040C] tracking-tighter tabular-nums drop-shadow-sm">
-                                                {displayedTotalVouchers.toLocaleString()}
-                                            </span>
-                                            <span className="text-[9px] text-gray-400 uppercase tracking-[0.2em] mt-0.5 font-bold">Total</span>
-                                        </div>
-                                    </div>
-                                </div>
+                            <div className="relative z-10 flex-1 flex flex-col gap-3 justify-center w-full">
+                                {(() => {
+                                    const items = rankingTab === "depositors"
+                                        ? (dashboardData?.owners_ranking?.depositors || [])
+                                        : (dashboardData?.owners_ranking?.withdrawers || []);
 
-                                {/* Premium Legend */}
-                                <div className="w-full grid grid-cols-1 gap-2.5 mt-2">
-                                    {computedDonutSegments.map((seg, i) => {
+                                    if (items.length === 0) {
+                                        // Empty state
                                         return (
-                                            <div key={i} className="group relative flex items-center justify-between p-3.5 rounded-2xl border border-gray-100/80 bg-gray-50/50 hover:bg-white hover:shadow-[0_8px_24px_-8px_rgba(0,0,0,0.12)] hover:border-gray-200/80 transition-all duration-300 cursor-default overflow-hidden">
-                                                {/* Left Accent indicator */}
-                                                <div className="absolute left-0 top-0 bottom-0 w-1.5 transition-transform duration-300 origin-left group-hover:scale-x-150" style={{ backgroundColor: seg.color }} />
+                                            <div className="flex flex-col items-center justify-center p-8 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                                                <Users size={24} className="text-gray-300 mb-2" />
+                                                <p className="text-sm font-semibold text-gray-400">No rankings available</p>
+                                            </div>
+                                        )
+                                    }
 
-                                                <div className="pl-3 flex flex-col gap-1">
-                                                    <p className="text-[13px] font-black text-gray-700 leading-none group-hover:text-[#2D040C] transition-colors">{seg.label}</p>
-                                                    <span className="text-[11px] text-gray-500 font-semibold tabular-nums mt-0.5 flex items-center gap-1.5">
-                                                        {seg.count.toLocaleString()} vouchers
-                                                    </span>
-                                                </div>
+                                    // Find max value to normalize progress bars
+                                    const maxAmount = Math.max(...items.map(i => i.amount));
 
-                                                <div className="text-right pr-1">
-                                                    <span className="text-lg font-black tracking-tight drop-shadow-sm" style={{ color: seg.color }}>{seg.pct}%</span>
+                                    return items.map((item, idx) => {
+                                        const progress = maxAmount > 0 ? (item.amount / maxAmount) * 100 : 0;
+                                        const isDeposit = rankingTab === "depositors";
+
+                                        return (
+                                            <div key={idx} className="group relative flex flex-col p-4 rounded-[16px] border border-gray-100 bg-gray-50/50 hover:bg-white hover:shadow-[0_8px_24px_-8px_rgba(0,0,0,0.08)] hover:border-gray-200/80 transition-all duration-300 overflow-hidden cursor-default">
+                                                {/* Progress Bar background fill */}
+                                                <div
+                                                    className={`absolute left-0 top-0 bottom-0 opacity-10 transition-all duration-1000 ease-out ${isDeposit ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                                                    style={{ width: mounted ? `${progress}%` : '0%' }}
+                                                />
+
+                                                <div className="relative z-10 flex items-center justify-between gap-4 w-full">
+                                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                        {/* Rank Bubble */}
+                                                        <div className={`shrink-0 flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-black tabular-nums transition-colors shadow-sm
+                                                            ${idx === 0 ? 'bg-amber-100/80 text-amber-700 ring-1 ring-amber-200' :
+                                                                idx === 1 ? 'bg-slate-100/80 text-slate-700 ring-1 ring-slate-200' :
+                                                                    idx === 2 ? 'bg-orange-50 text-orange-700 ring-1 ring-orange-200/60' :
+                                                                        'bg-white text-gray-400 ring-1 ring-gray-100'}
+                                                        `}>
+                                                            {idx + 1}
+                                                        </div>
+                                                        <p className="text-sm font-extrabold text-gray-800 tracking-tight leading-none group-hover:text-[#2D040C] transition-colors truncate">{item.owner_name}</p>
+                                                    </div>
+
+                                                    <div className="text-right flex flex-col items-end shrink-0 ml-auto">
+                                                        <span className={`text-[15px] font-black tracking-tight drop-shadow-sm tabular-nums ${isDeposit ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                                            {formatCurrency(item.amount)}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         )
-                                    })}
-                                </div>
+                                    });
+                                })()}
                             </div>
                         </div>
 
+                    </div>
+                </div>
+
+                {/* ── Payment Method Distribution ─────────────────────────────── */}
+                <div
+                    className="rounded-[20px] bg-white border p-6 sm:p-8 mt-6 transition-all duration-500 hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] hover:border-gray-200"
+                    style={{
+                        borderColor: "rgba(0,0,0,0.12)",
+                        opacity: mounted ? 1 : 0,
+                        transform: mounted ? "translateY(0)" : "translateY(16px)",
+                        transition: "all 0.6s cubic-bezier(0.16,1,0.3,1) 0.5s",
+                    }}
+                >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <h3 className="text-xl font-black text-[#2D040C] tracking-tight">Payment Method Distribution</h3>
+                            <p className="text-[13px] text-gray-500 font-medium mt-1">Breakdown of transaction channels</p>
+                        </div>
+                    </div>
+
+                    {(() => {
+                        const methods = dashboardData?.payment_methods || { cash_deposit: 0, cheque_deposit: 0, bank_transfer: 0, cheque: 0 }
+                        const totalAmount = methods.cash_deposit + methods.cheque_deposit + methods.bank_transfer + methods.cheque;
+
+                        // Calculate percentages
+                        const getPct = (val: number) => totalAmount > 0 ? (val / totalAmount) * 100 : 0;
+                        const pCashDep = getPct(methods.cash_deposit);
+                        const pChequeDep = getPct(methods.cheque_deposit);
+                        const pBankTrans = getPct(methods.bank_transfer);
+                        const pCheque = getPct(methods.cheque);
+
+                        // Colors
+                        const cCashDep = "bg-[#10b981]";
+                        const cChequeDep = "bg-[#3b82f6]";
+                        const cBankTrans = "bg-[#6366f1]";
+                        const cCheque = "bg-[#f59e0b]";
+
+                        return (
+                            <div className="flex flex-col gap-6">
+                                {/* Segmented Progress Bar */}
+                                <div className="h-4 sm:h-5 w-full bg-gray-100 rounded-full flex overflow-hidden ring-1 ring-inset ring-gray-900/5">
+                                    <div className={`${cCashDep} h-full transition-all duration-1000 ease-out`} style={{ width: mounted ? `${pCashDep}%` : '0%' }} title={`Cash Deposit: ${pCashDep.toFixed(1)}%`} />
+                                    <div className={`${cChequeDep} h-full transition-all duration-1000 ease-out`} style={{ width: mounted ? `${pChequeDep}%` : '0%' }} title={`Cheque Deposit: ${pChequeDep.toFixed(1)}%`} />
+                                    <div className={`${cBankTrans} h-full transition-all duration-1000 ease-out`} style={{ width: mounted ? `${pBankTrans}%` : '0%' }} title={`Bank Transfer: ${pBankTrans.toFixed(1)}%`} />
+                                    <div className={`${cCheque} h-full transition-all duration-1000 ease-out`} style={{ width: mounted ? `${pCheque}%` : '0%' }} title={`Cheque: ${pCheque.toFixed(1)}%`} />
+                                </div>
+
+                                {/* Legend Matrix */}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                    <div className="flex flex-col gap-1 p-3 rounded-xl bg-gray-50/50 border border-gray-100">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-3 h-3 rounded-[3px] shadow-sm ${cCashDep}`} />
+                                            <span className="text-[12px] font-bold text-gray-500 uppercase tracking-widest">Cash Deposit</span>
+                                        </div>
+                                        <div className="flex items-baseline gap-2 mt-1">
+                                            <span className="text-xl font-black text-gray-800 tracking-tight tabular-nums">{pCashDep.toFixed(1)}%</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1 p-3 rounded-xl bg-gray-50/50 border border-gray-100">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-3 h-3 rounded-[3px] shadow-sm ${cChequeDep}`} />
+                                            <span className="text-[12px] font-bold text-gray-500 uppercase tracking-widest">Cheque Deposit</span>
+                                        </div>
+                                        <div className="flex items-baseline gap-2 mt-1">
+                                            <span className="text-xl font-black text-gray-800 tracking-tight tabular-nums">{pChequeDep.toFixed(1)}%</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1 p-3 rounded-xl bg-gray-50/50 border border-gray-100">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-3 h-3 rounded-[3px] shadow-sm ${cBankTrans}`} />
+                                            <span className="text-[12px] font-bold text-gray-500 uppercase tracking-widest">Bank Transfer</span>
+                                        </div>
+                                        <div className="flex items-baseline gap-2 mt-1">
+                                            <span className="text-xl font-black text-gray-800 tracking-tight tabular-nums">{pBankTrans.toFixed(1)}%</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1 p-3 rounded-xl bg-gray-50/50 border border-gray-100">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-3 h-3 rounded-[3px] shadow-sm ${cCheque}`} />
+                                            <span className="text-[12px] font-bold text-gray-500 uppercase tracking-widest">Cheque</span>
+                                        </div>
+                                        <div className="flex items-baseline gap-2 mt-1">
+                                            <span className="text-xl font-black text-gray-800 tracking-tight tabular-nums">{pCheque.toFixed(1)}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    })()}
+                </div>
+
+                {/* ── Transaction Frequency & Largest Transactions ────────────── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                    {/* Frequency Leaders */}
+                    <div
+                        className="rounded-[20px] bg-white border overflow-hidden transition-all duration-500 hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] hover:border-gray-200 flex flex-col h-full"
+                        style={{
+                            borderColor: "rgba(0,0,0,0.12)",
+                            opacity: mounted ? 1 : 0,
+                            transform: mounted ? "translateY(0)" : "translateY(16px)",
+                            transition: "all 0.6s cubic-bezier(0.16,1,0.3,1) 0.55s",
+                        }}
+                    >
+                        <div className="px-6 sm:px-8 py-6 border-b border-gray-100/80">
+                            <h3 className="text-xl font-black text-[#2D040C] tracking-tight">Transaction Frequency</h3>
+                            <p className="text-[13px] text-gray-500 font-medium mt-1 mb-4">Owners with the most transactions</p>
+
+                            <div className="flex items-center gap-1 bg-gray-100/80 p-1 rounded-xl w-full sm:w-fit mt-2 border border-gray-200 shadow-inner">
+                                <button
+                                    onClick={() => setFreqTab("all")}
+                                    className={`flex-1 sm:flex-none px-4 py-1.5 text-[13px] font-bold rounded-lg transition-all duration-300 pointer-events-auto cursor-pointer ${freqTab === "all" ? "bg-white text-[#4f46e5] shadow-sm ring-1 ring-gray-900/5" : "text-gray-500 hover:text-gray-700"}`}
+                                >
+                                    All Txs
+                                </button>
+                                <button
+                                    onClick={() => setFreqTab("depositors")}
+                                    className={`flex-1 sm:flex-none px-4 py-1.5 text-[13px] font-bold rounded-lg transition-all duration-300 pointer-events-auto cursor-pointer ${freqTab === "depositors" ? "bg-white text-[#10b981] shadow-sm ring-1 ring-gray-900/5" : "text-gray-500 hover:text-gray-700"}`}
+                                >
+                                    Deposits
+                                </button>
+                                <button
+                                    onClick={() => setFreqTab("withdrawers")}
+                                    className={`flex-1 sm:flex-none px-4 py-1.5 text-[13px] font-bold rounded-lg transition-all duration-300 pointer-events-auto cursor-pointer ${freqTab === "withdrawers" ? "bg-white text-[#f43f5e] shadow-sm ring-1 ring-gray-900/5" : "text-gray-500 hover:text-gray-700"}`}
+                                >
+                                    Withdrawals
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex-1 p-6 sm:p-8">
+                            <div className="flex flex-col gap-3">
+                                {(() => {
+                                    const items = freqTab === "all"
+                                        ? (dashboardData?.transaction_frequency?.all || [])
+                                        : freqTab === "depositors"
+                                            ? (dashboardData?.transaction_frequency?.depositors || [])
+                                            : (dashboardData?.transaction_frequency?.withdrawers || []);
+
+                                    if (items.length === 0) {
+                                        return <div className="text-center text-sm font-medium text-gray-400 py-8 bg-gray-50 rounded-xl border border-dashed my-auto">No data available</div>
+                                    }
+
+                                    const maxCount = Math.max(...items.map(i => i.count));
+
+                                    return items.map((item, idx) => {
+                                        const progress = maxCount > 0 ? (item.count / maxCount) * 100 : 0;
+                                        const progressColor = freqTab === "all" ? 'bg-indigo-500' : freqTab === "depositors" ? 'bg-emerald-500' : 'bg-rose-500';
+
+                                        return (
+                                            <div key={idx} className="group relative flex flex-col p-3 rounded-xl border border-gray-100 bg-white hover:bg-gray-50/50 hover:border-gray-200 transition-all overflow-hidden cursor-default">
+                                                <div
+                                                    className={`absolute left-0 top-0 bottom-0 opacity-10 transition-all duration-1000 ease-out ${progressColor}`}
+                                                    style={{ width: mounted ? `${progress}%` : '0%' }}
+                                                />
+                                                <div className="relative z-10 flex items-center justify-between gap-4">
+                                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                        <div className={`shrink-0 flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-extrabold ${idx < 3 ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                                            {idx + 1}
+                                                        </div>
+                                                        <p className="text-[13px] font-bold text-gray-700 truncate">{item.owner_name}</p>
+                                                    </div>
+                                                    <div className="shrink-0 font-black text-[15px] opacity-90 drop-shadow-sm tabular-nums text-gray-800">
+                                                        {item.count} <span className="text-[10px] font-medium text-gray-400 uppercase tracking-widest pl-0.5">Txns</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )
+                                    });
+                                })()}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Largest Transactions */}
+                    <div
+                        className="rounded-[20px] bg-white border overflow-hidden transition-all duration-500 hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] hover:border-gray-200 flex flex-col h-full"
+                        style={{
+                            borderColor: "rgba(0,0,0,0.12)",
+                            opacity: mounted ? 1 : 0,
+                            transform: mounted ? "translateY(0)" : "translateY(16px)",
+                            transition: "all 0.6s cubic-bezier(0.16,1,0.3,1) 0.6s",
+                        }}
+                    >
+                        <div className="px-6 sm:px-8 py-6 border-b border-gray-100/80 flex items-start justify-between">
+                            <div>
+                                <h3 className="text-xl font-black text-[#2D040C] tracking-tight">Largest Transactions</h3>
+                                <p className="text-[13px] text-gray-500 font-medium mt-1">Highest value transfers</p>
+                            </div>
+                            <div className="bg-amber-50 rounded-lg p-2 ring-1 ring-amber-100 hidden sm:block">
+                                <AlertCircle size={18} className="text-amber-600" />
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-x-auto">
+                            <table className="w-full min-w-[500px]">
+                                <thead className="bg-gray-50/50 border-b border-gray-100">
+                                    <tr>
+                                        <th className="px-6 py-3.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest whitespace-nowrap">Date</th>
+                                        <th className="px-6 py-3.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest">Target / Source</th>
+                                        <th className="px-6 py-3.5 text-right text-[11px] font-bold text-gray-500 uppercase tracking-widest">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100/80">
+                                    {(dashboardData?.largest_transactions || []).length > 0 ? (
+                                        (dashboardData?.largest_transactions || []).map((txn) => (
+                                            <tr key={txn.id} className="hover:bg-gray-50/50 transition-colors">
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className="text-[12px] font-bold text-gray-500">{txn.date}</span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md whitespace-nowrap shadow-sm ${txn.method === 'DEPOSIT' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-rose-50 text-rose-700 ring-1 ring-rose-200'}`}>
+                                                            {txn.method}
+                                                        </span>
+                                                        <span className="text-[12px] font-extrabold text-[#2D040C] line-clamp-1">{txn.owner_name}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-right whitespace-nowrap">
+                                                    <span className="text-[14px] font-black tracking-tight text-[#2D040C] drop-shadow-sm tabular-nums">
+                                                        {formatCurrency(txn.amount)}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={3} className="px-6 py-8 text-center text-[13px] font-medium text-gray-400 bg-gray-50">
+                                                No transactions found
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
@@ -689,7 +951,7 @@ export default function AccountantPanelPage() {
                                     placeholder="Search voucher or payee…"
                                     value={searchQuery}
                                     onChange={e => setSearchQuery(e.target.value)}
-                                    className="pl-10 pr-4 py-2.5 text-[13px] font-medium bg-gray-50/50 border border-gray-200/80 rounded-xl focus:outline-none focus:ring-4 focus:ring-[#7B0F2B]/10 focus:border-[#7B0F2B]/40 hover:border-gray-300 transition-all w-full sm:w-60 placeholder:text-gray-400"
+                                    className="pl-10 pr-4 py-2.5 text-[13px] font-medium bg-gray-50/50 border border-gray-200/80 rounded-md focus:outline-none focus:ring-4 focus:ring-[#7B0F2B]/10 focus:border-[#7B0F2B]/40 hover:border-gray-300 transition-all w-full sm:w-60 placeholder:text-gray-400"
                                 />
                             </div>
                             {/* Filter */}
@@ -698,7 +960,7 @@ export default function AccountantPanelPage() {
                                 <select
                                     value={statusFilter}
                                     onChange={e => setStatusFilter(e.target.value as any)}
-                                    className="pl-10 pr-8 py-2.5 text-[13px] font-medium bg-gray-50/50 border border-gray-200/80 rounded-xl appearance-none focus:outline-none focus:ring-4 focus:ring-[#7B0F2B]/10 focus:border-[#7B0F2B]/40 hover:border-gray-300 transition-all cursor-pointer text-gray-700"
+                                    className="pl-10 pr-8 py-2.5 text-[13px] font-medium bg-gray-50/50 border border-gray-200/80 rounded-md appearance-none focus:outline-none focus:ring-4 focus:ring-[#7B0F2B]/10 focus:border-[#7B0F2B]/40 hover:border-gray-300 transition-all cursor-pointer text-gray-700"
                                 >
                                     <option value="All">All Status</option>
                                     <option value="Approved">Approved</option>
@@ -708,7 +970,7 @@ export default function AccountantPanelPage() {
                             {/* Navigation */}
                             <Link
                                 href="/super/accountant/voucher/cash-voucher-list"
-                                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-[13px] font-bold text-white bg-gradient-to-r from-[#7B0F2B] to-[#5f0c18] hover:from-[#5f0c18] hover:to-[#4a0812] rounded-xl transition-all shadow-[0_4px_12px_rgba(123,15,43,0.15)] hover:shadow-[0_6px_16px_rgba(123,15,43,0.25)] hover:-translate-y-0.5"
+                                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-[13px] font-bold text-white bg-gradient-to-r from-[#7B0F2B] to-[#5f0c18] hover:from-[#5f0c18] hover:to-[#4a0812] rounded-md transition-all shadow-[0_4px_12px_rgba(123,15,43,0.15)] hover:shadow-[0_6px_16px_rgba(123,15,43,0.25)] hover:-translate-y-0.5"
                             >
                                 <span className="hidden sm:inline">Vouchers List</span>
                                 <span className="sm:hidden">List</span>
