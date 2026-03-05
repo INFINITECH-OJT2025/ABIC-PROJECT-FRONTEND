@@ -15,6 +15,8 @@ import {
   LayoutGrid,
   List,
   Ban,
+  Wallet,
+  CheckSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,6 +29,7 @@ import DownloadButton from "@/components/ui/voucher-download-button";
 import ConfirmationModal from "@/components/app/ConfirmationModal";
 import AppHeader from "@/components/app/AppHeader";
 import SharedToolbar from "@/components/app/SharedToolbar";
+import SummaryBar, { StatPill } from "@/components/app/SummaryBar";
 import { superAdminNav } from "@/lib/navigation";
 
 const ACCENT = "#7a0f1f";
@@ -989,6 +992,7 @@ export default function ChequeVoucherListPage() {
             <Eye className="w-4 h-4" />
             View
           </button>
+          {(v.status || "").toLowerCase() !== "cancelled" && (
           <button
             className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#7B0F2B]/30 hover:bg-[#7B0F2B]/5 transition text-xs font-semibold"
             onClick={() => openPanelEdit(v)}
@@ -997,6 +1001,7 @@ export default function ChequeVoucherListPage() {
             <Edit2 className="w-4 h-4" />
             Edit
           </button>
+          )}
           {(v.status || "").toLowerCase() !== "cancelled" && (
             <button
               className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-red-200 bg-white text-red-700 hover:border-red-300 hover:bg-red-50 transition text-xs font-semibold"
@@ -1151,6 +1156,12 @@ export default function ChequeVoucherListPage() {
             </button>
         }
       />
+
+      <SummaryBar>
+        <StatPill icon={Wallet} label="Total" value={loading ? null : vouchers.length} />
+        <StatPill icon={CheckSquare} label="Approved" value={loading ? null : vouchers.filter(v => ["approved", "completed", "done"].includes((v.status || "").toLowerCase())).length} />
+        <StatPill icon={Ban} label="Cancelled" value={loading ? null : vouchers.filter(v => (v.status || "").toLowerCase() === "cancelled").length} />
+      </SummaryBar>
 
       <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8">
         <section

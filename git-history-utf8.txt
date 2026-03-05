@@ -1,0 +1,119 @@
+﻿commit eda5fcd3e0862cd02a7b9f46f06eddfa873c789b
+Author: LanceEsp-Hub <lancecedrickespina@gmail.com>
+Date:   Thu Mar 5 10:25:58 2026 +0800
+
+    feat: Implement comprehensive form validation with real-time error display and tooltip component.
+
+commit e96a079d743ef6145c92fc47ccfd199c7c441b18
+Merge: 88896a8 3bdb73e
+Author: INFINITECH-OJT2025 <infinitechojt2025@gmail.com>
+Date:   Wed Mar 4 14:40:54 2026 +0800
+
+    Merge pull request #5 from INFINITECH-OJT2025/MARCH-4---TRANSACTION-AND-LEDGER-FRONTEND
+    
+    March 4   transaction and ledger frontend
+
+commit 3bdb73e9dfa5933ac39e029d55c01880f14f2e78
+Merge: 267965a 73f8aa9
+Author: INFINITECH-OJT2025 <infinitechojt2025@gmail.com>
+Date:   Wed Mar 4 14:40:30 2026 +0800
+
+    Merge pull request #4 from INFINITECH-OJT2025/MARCH-4-FRONTEND-JULIEBOY
+    
+    feat: Update navigation links and add Accountant Panel page with KPI ΓÇª
+
+commit 73f8aa93d737ae2a1d0f7f7defaa188ba25765e3
+Merge: c1452ba 267965a
+Author: INFINITECH-OJT2025 <infinitechojt2025@gmail.com>
+Date:   Wed Mar 4 14:40:20 2026 +0800
+
+    Merge branch 'MARCH-4---TRANSACTION-AND-LEDGER-FRONTEND' into MARCH-4-FRONTEND-JULIEBOY
+
+commit 267965a9d9bfec7e13eb6712f5ead857a821e0ce
+Merge: d5c1526 c1ae0ec
+Author: INFINITECH-OJT2025 <infinitechojt2025@gmail.com>
+Date:   Wed Mar 4 14:39:16 2026 +0800
+
+    Merge pull request #3 from INFINITECH-OJT2025/MARCH-4-FRONTEND-LANCE
+    
+    feat: Implement cash and cheque voucher creation forms and their respΓÇª
+
+commit c1ae0ece47f48a9391798c1a923ac6493bcc3b38
+Merge: 19f5eae d5c1526
+Author: INFINITECH-OJT2025 <infinitechojt2025@gmail.com>
+Date:   Wed Mar 4 14:39:06 2026 +0800
+
+    Merge branch 'MARCH-4---TRANSACTION-AND-LEDGER-FRONTEND' into MARCH-4-FRONTEND-LANCE
+
+commit d5c1526c94b0abf52e48bb0d2643e79e43a8a961
+Author: INFINITECH-OJT2025 <infinitechojt2025@gmail.com>
+Date:   Wed Mar 4 14:34:20 2026 +0800
+
+    feat: Implement accountant module with transaction and receipt management, including new API routes, UI components, and pages.
+
+commit c1452bad1e39831cef80660ec3eec03a9a6a2fe4
+Author: Julieverrs <165794975+Julieverrs@users.noreply.github.com>
+Date:   Wed Mar 4 14:30:31 2026 +0800
+
+    feat: Update navigation links and add Accountant Panel page with KPI metrics, charts, and recent vouchers table
+
+commit 19f5eaedf4cb5f2c0a402b31f06f959ea2ad6869
+Author: LanceEsp-Hub <lancecedrickespina@gmail.com>
+Date:   Wed Mar 4 14:21:35 2026 +0800
+
+    feat: Implement cash and cheque voucher creation forms and their respective listing pages.
+
+commit 88896a880f750b69ff91877472133c3f2b632a7a
+Merge: 32c3da6 299701c
+Author: INFINITECH-OJT2025 <infinitechojt2025@gmail.com>
+Date:   Wed Mar 4 09:16:03 2026 +0800
+
+    Merge pull request #2 from INFINITECH-OJT2025/lance2
+    
+    Lance2
+
+commit 299701c92785cd8298e8696ece9194855040bb49
+Merge: ea8b067 6481513
+Author: INFINITECH-OJT2025 <infinitechojt2025@gmail.com>
+Date:   Wed Mar 4 09:13:54 2026 +0800
+
+    Merge pull request #1 from INFINITECH-OJT2025/New-Transaction
+    
+    New transaction
+
+commit 648151324542c20eed701d61d60e901dc28838ca
+Merge: 922eed0 ea8b067
+Author: INFINITECH-OJT2025 <infinitechojt2025@gmail.com>
+Date:   Wed Mar 4 09:13:46 2026 +0800
+
+    Merge branch 'lance2' into New-Transaction
+
+commit 922eed08ace33d09fdbba039fac225372f52db91
+Author: INFINITECH-OJT2025 <infinitechojt2025@gmail.com>
+Date:   Wed Mar 4 09:02:49 2026 +0800
+
+    feat: Add accountant module with ledger, transaction receipts, unit management, and a new data table component.
+
+commit ea8b067173b019e72b2e96d19486c8fb0f889e83
+Author: LanceEsp-Hub <lancecedrickespina@gmail.com>
+Date:   Tue Mar 3 16:33:24 2026 +0800
+
+    feat: Implement Cash and Cheque Voucher creation, preview, and listing functionality with dedicated UI components, pages, and API endpoints.
+
+commit 32c3da60acf37616d0b6588cfb9d46f68d493277
+Author: INFINITECH-OJT2025 <infinitechojt2025@gmail.com>
+Date:   Tue Mar 3 14:32:37 2026 +0800
+
+    feat: Implement accountant ledger APIs, transaction pages, and owner/unit management components.
+
+commit 83623880a18812025672d5c2bb92b9234a5c4b25
+Author: INFINITECH-OJT2025 <infinitechojt2025@gmail.com>
+Date:   Tue Mar 3 11:24:27 2026 +0800
+
+    first commit 1
+
+commit 4b914e2ddbae5e5e6cfbe5294b61552b835667d7
+Author: INFINITECH-OJT2025 <infinitechojt2025@gmail.com>
+Date:   Tue Mar 3 11:23:52 2026 +0800
+
+    first commit

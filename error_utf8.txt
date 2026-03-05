@@ -1,2 +1,7 @@
-﻿components/app/super/voucher/CashVoucher/FormSection.tsx(275,39): error TS2339: Property 'accountName' does not exist on type 'PrintableData'.
-components/app/super/voucher/CashVoucher/FormSection.tsx(276,39): error TS2339: Property 'accountNumber' does not exist on type 'PrintableData'.
+﻿app/super/accountant/ledger/client/page.tsx(226,20): error TS2552: Cannot find name 'useRouter'. Did you mean 'router'?
+app/super/accountant/ledger/client/page.tsx(227,26): error TS2552: Cannot find name 'useSearchParams'. Did you mean 'searchParams'?
+app/super/accountant/ledger/client/page.tsx(262,53): error TS7006: Parameter 'o' implicitly has an 'any' type.
+app/super/accountant/ledger/main/page.tsx(258,25): error TS2304: Cannot find name 'initialOwnerId'.
+app/super/accountant/ledger/main/page.tsx(259,51): error TS7006: Parameter 'o' implicitly has an 'any' type.
+app/super/accountant/ledger/main/page.tsx(259,73): error TS2304: Cannot find name 'initialOwnerId'.
+app/super/accountant/ledger/main/page.tsx(260,56): error TS2304: Cannot find name 'initialOwnerId'.

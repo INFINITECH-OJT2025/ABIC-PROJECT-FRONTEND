@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
 import ConfirmationModal from "@/components/app/ConfirmationModal";
 import FormTooltipError from "@/components/ui/form-tooltip-error";
-import { User, Receipt, Calendar, Briefcase, Building2, Target, Banknote, AlignLeft, FileText, CheckSquare, DollarSign } from "lucide-react";
+import { User, Receipt, Ban, Calendar, Briefcase, Building2, Target, Banknote, AlignLeft, FileText, CheckSquare, DollarSign } from "lucide-react";
 
 const ACCENT = "#7a0f1f";
 const BORDER = "rgba(0,0,0,0.12)";
@@ -33,6 +33,7 @@ export default function FormSection({
   onSuccessClear,
 }: FormSectionProps) {
   const [formError, setFormError] = useState<string | null>(null);
+  const [signatureToRemove, setSignatureToRemove] = useState<"receivedFromSignature" | "approvedBySignature" | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
@@ -208,7 +209,7 @@ export default function FormSection({
 
   return (
     <div className="w-full">
-      <form className="space-y-6">
+      <form className="space-y-1">
         {formError && (
           <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
             {formError}
@@ -219,132 +220,137 @@ export default function FormSection({
             
             {/* BASIC DETAILS */}
             <SectionCard title="Basic Details" icon={<FileText className="w-4 h-4" />}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="relative md:col-span-2">
-                  <label className={labelClass}>Paid To <span className="text-red-500">*</span></label>
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Paid To */}
                   <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      <User className="h-4 w-4" />
+                    <label className={labelClass}>Paid To <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                        <User className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="text"
+                        value={formData.paidTo ?? ""}
+                        onChange={(e) => { if (errors.paidTo && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.paidTo; return nv; });
+                          onInputChange("paidTo", e.target.value);
+                          setShowSuggestions(true);
+                        }}
+                        onFocus={() => setShowSuggestions(true)}
+                        onBlur={() => { setTouched(prev => ({ ...prev, paidTo: true })); if (!formData.paidTo) setErrors(prev => ({ ...prev, paidTo: "This field is required." })); setTimeout(() => setShowSuggestions(false), 200); }}
+                        id="paidTo"
+                        autoComplete="off"
+                        className={`${fieldClass} ${touched.paidTo && errors.paidTo ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+                        placeholder="Enter payee name"
+                      />
                     </div>
-                    <input
-                      type="text"
-                      value={formData.paidTo ?? ""}
-                      onChange={(e) => { if (errors.paidTo && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.paidTo; return nv; });
-                        onInputChange("paidTo", e.target.value);
-                        setShowSuggestions(true);
-                      }}
-                      onFocus={() => setShowSuggestions(true)}
-                      onBlur={() => { setTouched(prev => ({ ...prev, paidTo: true })); if (!formData.paidTo) setErrors(prev => ({ ...prev, paidTo: "This field is required." })); setTimeout(() => setShowSuggestions(false), 200); }}
-                      id="paidTo"
-                      autoComplete="off"
-                      className={`${fieldClass} ${touched.paidTo && errors.paidTo ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                      placeholder="Enter payee name"
-                    />
+                    {touched.paidTo && errors.paidTo && (
+                      <FormTooltipError message={errors.paidTo} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.paidTo; return nv; })} />
+                    )}
+                    {showSuggestions && recentVouchers.filter((v) => v.paidTo?.toLowerCase().includes((formData.paidTo || "").toLowerCase())).length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                        {recentVouchers
+                          .filter((v) => v.paidTo?.toLowerCase().includes((formData.paidTo || "").toLowerCase()))
+                          .map((s, i) => (
+                            <div
+                              key={i}
+                              className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm flex flex-col"
+                              onClick={() => {
+                                onInputChange("paidTo", s.paidTo || "");
+                                if (s.projectDetails) onInputChange("projectDetails", s.projectDetails);
+                                if (s.owner) onInputChange("owner", s.owner);
+                                if (s.purpose) onInputChange("purpose", s.purpose);
+                                if (s.amount) onInputChange("amount", s.amount);
+                                if (s.note) onInputChange("note", s.note);
+                                setShowSuggestions(false);
+                                setErrors(prev => {
+                                  const nv = { ...prev };
+                                  delete nv.paidTo;
+                                  if (s.projectDetails) delete nv.projectDetails;
+                                  if (s.owner) delete nv.owner;
+                                  if (s.purpose) delete nv.purpose;
+                                  if (s.amount) delete nv.amount;
+                                  if (s.note) delete nv.note;
+                                  return nv;
+                                });
+                              }}
+                            >
+                              <span className="font-semibold text-gray-900">{s.paidTo}</span>
+                              <span className="text-xs text-gray-500 line-clamp-1">
+                                {s.purpose} {s.amount ? `- ₱${s.amount}` : ""}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
                   </div>
-                  {touched.paidTo && errors.paidTo && (
-                    <FormTooltipError message={errors.paidTo} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.paidTo; return nv; })} />
-                  )}
-                  {showSuggestions && recentVouchers.filter((v) => v.paidTo?.toLowerCase().includes((formData.paidTo || "").toLowerCase())).length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
-                      {recentVouchers
-                        .filter((v) => v.paidTo?.toLowerCase().includes((formData.paidTo || "").toLowerCase()))
-                        .map((s, i) => (
-                          <div
-                            key={i}
-                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm flex flex-col"
-                            onClick={() => {
-                              onInputChange("paidTo", s.paidTo || "");
-                              if (s.projectDetails) onInputChange("projectDetails", s.projectDetails);
-                              if (s.owner) onInputChange("owner", s.owner);
-                              if (s.purpose) onInputChange("purpose", s.purpose);
-                              if (s.amount) onInputChange("amount", s.amount);
-                              if (s.note) onInputChange("note", s.note);
-                              setShowSuggestions(false);
-                              setErrors(prev => {
-                                const nv = { ...prev };
-                                delete nv.paidTo;
-                                if (s.projectDetails) delete nv.projectDetails;
-                                if (s.owner) delete nv.owner;
-                                if (s.purpose) delete nv.purpose;
-                                if (s.amount) delete nv.amount;
-                                if (s.note) delete nv.note;
-                                return nv;
-                              });
-                            }}
-                          >
-                            <span className="font-semibold text-gray-900">{s.paidTo}</span>
-                            <span className="text-xs text-gray-500 line-clamp-1">
-                              {s.purpose} {s.amount ? `- ₱${s.amount}` : ""}
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </div>
 
-                <div>
-                  <label className={labelClass}>Voucher No <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      <Receipt className="h-4 w-4" />
+                  {/* Voucher No */}
+                  <div>
+                    <label className={labelClass}>Voucher No <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                        <Receipt className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="text"
+                        value={formData.voucherNo ?? ""}
+                        disabled
+                        onChange={(e) => onInputChange("voucherNo", e.target.value)}
+                        id="voucherNo"
+                        className={fieldClass}
+                      />
                     </div>
-                    <input
-                      type="text"
-                      value={formData.voucherNo ?? ""}
-                      disabled
-                      onChange={(e) => onInputChange("voucherNo", e.target.value)}
-                      id="voucherNo"
-                      className={fieldClass}
-                    />
                   </div>
-                </div>
 
-                <div>
-                  <label className={labelClass}>Date <span className="text-red-500">*</span></label>
+                  {/* Date */}
                   <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      <Calendar className="h-4 w-4" />
-                    </div>
-                    <input
-                      type="date"
-                      value={formData.date || ""}
-                      onChange={(e) => { onInputChange("date", e.target.value); if (errors.date && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.date; return nv; }); }}
-                      onBlur={() => { setTouched(prev => ({ ...prev, date: true })); if (!formData.date) setErrors(prev => ({ ...prev, date: "This field is required." })); }} id="date"
-                      className={`${fieldClass} ${touched.date && errors.date ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                    />
+                      <label className={labelClass}>Date <span className="text-red-500">*</span></label>
+                      <div className="relative">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                          <Calendar className="h-4 w-4" />
+                        </div>
+                        <input
+                          type="date"
+                          value={formData.date || ""}
+                          onChange={(e) => { onInputChange("date", e.target.value); if (errors.date && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.date; return nv; }); }}
+                          onBlur={() => { setTouched(prev => ({ ...prev, date: true })); if (!formData.date) setErrors(prev => ({ ...prev, date: "This field is required." })); }} id="date"
+                          className={`${fieldClass} ${touched.date && errors.date ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+                        />
+                      </div>
+                      {touched.date && errors.date && (
+                        <FormTooltipError message={errors.date} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.date; return nv; })} />
+                      )}
                   </div>
-                  {touched.date && errors.date && (
-                    <FormTooltipError message={errors.date} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.date; return nv; })} />
-                  )}
                 </div>
               </div>
             </SectionCard>
 
             {/* PARTICULAR DETAILS & AMOUNT */}
             <SectionCard title="Particular Details" icon={<Target className="w-4 h-4" />}>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="md:col-span-2 flex flex-col gap-4">
-                  <div>
-                    <label className={labelClass}>Purpose <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                      <div className="absolute left-3 top-3 text-gray-400">
-                        <Target className="h-4 w-4" />
-                      </div>
-                      <textarea
-                        value={formData.purpose ?? ""}
-                        onChange={(e) => { onInputChange("purpose", e.target.value.slice(0, 100)); if (errors.purpose && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.purpose; return nv; }); }}
-                        onBlur={() => { setTouched(prev => ({ ...prev, purpose: true })); if (!formData.purpose) setErrors(prev => ({ ...prev, purpose: "This field is required." })); }} id="purpose"
-                        maxLength={100}
-                        className={`${textareaClass} ${touched.purpose && errors.purpose ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                        placeholder="Transaction purpose"
-                        rows={3}
-                      />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className={labelClass}>Purpose <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-3 text-gray-400">
+                      <Target className="h-4 w-4" />
+                    </div>
+                    <textarea
+                      value={formData.purpose ?? ""}
+                      onChange={(e) => { onInputChange("purpose", e.target.value.slice(0, 350)); if (errors.purpose && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.purpose; return nv; }); }}
+                      onBlur={() => { setTouched(prev => ({ ...prev, purpose: true })); if (!formData.purpose) setErrors(prev => ({ ...prev, purpose: "This field is required." })); }} id="purpose"
+                      maxLength={350}
+                      className={`${textareaClass} ${touched.purpose && errors.purpose ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+                      placeholder="Transaction purpose"
+                      rows={6}
+                    />
                   </div>
                   {touched.purpose && errors.purpose && (
                     <FormTooltipError message={errors.purpose} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.purpose; return nv; })} />
                   )}
-                  </div>
+                </div>
 
+                <div className="flex flex-col">
                   <div>
                     <label className={labelClass}>Note <span className="text-red-500">*</span></label>
                     <div className="relative">
@@ -353,42 +359,42 @@ export default function FormSection({
                       </div>
                       <textarea
                         value={formData.note ?? ""}
-                        onChange={(e) => { onInputChange("note", e.target.value.slice(0, 300)); if (errors.note && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.note; return nv; }); }}
+                        onChange={(e) => { onInputChange("note", e.target.value.slice(0, 150)); if (errors.note && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.note; return nv; }); }}
                         onBlur={() => { setTouched(prev => ({ ...prev, note: true })); if (!formData.note) setErrors(prev => ({ ...prev, note: "This field is required." })); }} id="note"
-                        maxLength={300}
+                        maxLength={150}
                         className={`${textareaClass} ${touched.note && errors.note ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                         placeholder="Additional notes"
-                        rows={3}
+                        rows={2}
                       />
-                  </div>
-                  {touched.note && errors.note && (
-                    <FormTooltipError message={errors.note} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.note; return nv; })} />
-                  )}
-                  </div>
-                </div>
-
-                <div className="md:col-span-1">
-                  <label className={labelClass}>Amount (₱) <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      <Banknote className="h-4 w-4" />
                     </div>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={formData.amount ?? ""}
-                      onChange={(e) => { if (errors.amount && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.amount; return nv; });
-                        const val = e.target.value.replace(/[^0-9.]/g, "");
-                        onInputChange("amount", val);
-                      }}
-                      onBlur={() => { setTouched(prev => ({ ...prev, amount: true })); if (!formData.amount) setErrors(prev => ({ ...prev, amount: "This field is required." })); }} id="amount"
-                      className={`${amountFieldClass} ${touched.amount && errors.amount ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                      placeholder="0.00"
-                    />
+                    {touched.note && errors.note && (
+                      <FormTooltipError message={errors.note} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.note; return nv; })} />
+                    )}
                   </div>
-                  {touched.amount && errors.amount && (
-                    <FormTooltipError message={errors.amount} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.amount; return nv; })} />
-                  )}
+
+                  <div>
+                    <label className={labelClass}>Amount (₱) <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                        <Banknote className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={formData.amount ?? ""}
+                        onChange={(e) => { if (errors.amount && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.amount; return nv; });
+                          const val = e.target.value.replace(/[^0-9.]/g, "");
+                          onInputChange("amount", val);
+                        }}
+                        onBlur={() => { setTouched(prev => ({ ...prev, amount: true })); if (!formData.amount) setErrors(prev => ({ ...prev, amount: "This field is required." })); }} id="amount"
+                        className={`${amountFieldClass} ${touched.amount && errors.amount ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    {touched.amount && errors.amount && (
+                      <FormTooltipError message={errors.amount} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.amount; return nv; })} />
+                    )}
+                  </div>
                 </div>
               </div>
             </SectionCard>
@@ -523,7 +529,7 @@ export default function FormSection({
                       {formData.receivedFromSignature && (
                         <button
                           type="button"
-                          onClick={() => onInputChange("receivedFromSignature", "")}
+                          onClick={() => setSignatureToRemove("receivedFromSignature")}
                           className="bg-white border border-red-200 px-2 py-1 text-[10px] font-medium text-red-600 rounded shadow-sm hover:bg-red-50 uppercase tracking-wide"
                         >
                           Remove
@@ -601,7 +607,7 @@ export default function FormSection({
                       {formData.approvedBySignature && (
                         <button
                           type="button"
-                          onClick={() => onInputChange("approvedBySignature", "")}
+                          onClick={() => setSignatureToRemove("approvedBySignature")}
                           className="bg-white border border-red-200 px-2 py-1 text-[10px] font-medium text-red-600 rounded shadow-sm hover:bg-red-50 uppercase tracking-wide"
                         >
                           Remove
@@ -636,7 +642,25 @@ export default function FormSection({
         <div className="pt-4 w-full">
           <DownloadButton formData={formData} onValidate={validateRequired} onSave={saveVoucherToDatabase} onSuccess={onSuccessClear} />
         </div>
-      </form>
+      
+      <ConfirmationModal
+        open={signatureToRemove !== null}
+        title="Remove Signature"
+        message="Are you sure you want to remove this signature?"
+        confirmLabel="Yes, Remove"
+        cancelLabel="Cancel"
+        icon={Ban}
+        color="#dc2626"
+        onCancel={() => setSignatureToRemove(null)}
+        onConfirm={() => {
+          if (signatureToRemove) {
+            onInputChange(signatureToRemove, "");
+          }
+          setSignatureToRemove(null);
+        }}
+        zIndex={50}
+      />
+    </form>
     </div>
   );
 }
