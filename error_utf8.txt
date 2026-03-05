@@ -1,0 +1,2 @@
+﻿components/app/super/voucher/CashVoucher/FormSection.tsx(275,39): error TS2339: Property 'accountName' does not exist on type 'PrintableData'.
+components/app/super/voucher/CashVoucher/FormSection.tsx(276,39): error TS2339: Property 'accountNumber' does not exist on type 'PrintableData'.
