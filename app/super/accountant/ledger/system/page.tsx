@@ -1,39 +1,20 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
-    ArrowDownCircle,
-    ArrowUpCircle,
-    Building2,
-    Calendar,
-    ChevronDown,
     Download,
     Eye,
     EyeOff,
-    Filter,
-    Search,
     FileText
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import AppHeader from "@/components/app/AppHeader";
-import SummaryBar, { StatPill } from "@/components/app/SummaryBar";
-import DataTable, { DataTableColumn } from "@/components/app/DataTable";
 import DataTableLedge, { InstrumentFilesPopover } from "@/components/app/DataTableLedge";
 import SharedToolbar from "@/components/app/SharedToolbar";
+import { DataTableColumn } from "@/components/app/DataTable";
 
 // ─── Interfaces ────────────────────────────────────────────────────────────────
-
-interface Owner {
-    id: number | string;
-    name: string;
-    owner_type: string;
-}
-
-interface Unit {
-    id: number | string;
-    unit_name: string;
-}
 
 interface LedgerEntry {
     id: number;
@@ -61,183 +42,19 @@ interface LedgerEntry {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const BORDER = "rgba(0,0,0,0.12)";
-const ACCENT = "#7a0f1f";
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+export default function SystemLedgerPage() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const highlightTx = searchParams.get("highlightTx");
 
-function useOutsideClick(ref: React.RefObject<HTMLElement | null>, handler: () => void) {
-    useEffect(() => {
-        function handleClick(e: MouseEvent) {
-            if (ref.current && !ref.current.contains(e.target as Node)) {
-                handler();
-            }
-        }
-        document.addEventListener("mousedown", handleClick);
-        return () => document.removeEventListener("mousedown", handleClick);
-    }, [ref, handler]);
-}
-
-// ─── Searchable Dropdown Component ───────────────────────────────────────────
-
-function OwnerSelectDropdown({
-    owners,
-    selectedId,
-    onChange,
-    loading
-}: {
-    owners: Owner[];
-    selectedId: string | number | null;
-    onChange: (id: string | number) => void;
-    loading?: boolean;
-}) {
-    const [open, setOpen] = useState(false);
-    const [query, setQuery] = useState("");
-    const ref = useRef<HTMLDivElement>(null);
-
-    useOutsideClick(ref, () => setOpen(false));
-
-    const selectedOwner = owners.find(o => String(o.id) === String(selectedId));
-    const filteredOwners = owners.filter(o => o.name.toLowerCase().includes(query.toLowerCase()));
-
-    return (
-        <div ref={ref} className="relative shrink-0 w-72">
-            <div
-                onClick={() => setOpen(!open)}
-                className={`flex items-center w-full h-10 pl-3 pr-8 rounded-lg border text-sm font-semibold bg-white cursor-pointer transition-colors ${open ? 'border-[#7B0F2B] ring-2 ring-[#7B0F2B]/20' : 'border-gray-300 hover:border-gray-400'}`}
-            >
-                <Building2 className="w-4 h-4 text-gray-400 mr-2 shrink-0" />
-                <span className="truncate text-gray-700">
-                    {loading ? "Loading owners..." : (selectedOwner?.name ?? "Select Owner...")}
-                </span>
-                <ChevronDown className={`w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 transition-transform ${open ? 'rotate-180' : ''}`} />
-            </div>
-
-            {open && !loading && (
-                <div className="absolute top-full mt-1 left-0 w-full z-50 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden">
-                    <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
-                        <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                        <input
-                            autoFocus
-                            type="text"
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search owner..."
-                            className="flex-1 text-sm outline-none bg-transparent"
-                            onClick={(e) => e.stopPropagation()}
-                        />
-                    </div>
-                    <div className="max-h-52 overflow-y-auto">
-                        {filteredOwners.length === 0 ? (
-                            <div className="px-4 py-3 text-sm text-gray-400 text-center">No owners found</div>
-                        ) : (
-                            filteredOwners.map((o) => (
-                                <button
-                                    key={o.id}
-                                    type="button"
-                                    onClick={() => { onChange(o.id); setOpen(false); setQuery(""); }}
-                                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors ${String(selectedId) === String(o.id) ? "bg-red-50 text-[#7a0f1f] font-bold" : "text-gray-900 font-medium"}`}
-                                >
-                                    <span className="truncate block">{o.name}</span>
-                                </button>
-                            ))
-                        )}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
-
-// ─── Unit Searchable Dropdown Component ──────────────────────────────────────
-
-function UnitSelectDropdown({
-    units,
-    selectedId,
-    onChange,
-    disabled
-}: {
-    units: Unit[];
-    selectedId: string | number;
-    onChange: (id: string | number) => void;
-    disabled?: boolean;
-}) {
-    const [open, setOpen] = useState(false);
-    const [query, setQuery] = useState("");
-    const ref = useRef<HTMLDivElement>(null);
-
-    useOutsideClick(ref, () => setOpen(false));
-
-    const selectedUnit = selectedId === "ALL"
-        ? null
-        : units.find(u => String(u.id) === String(selectedId));
-
-    const filteredUnits = units.filter(u => u.unit_name.toLowerCase().includes(query.toLowerCase()));
-
-    return (
-        <div ref={ref} className="relative shrink-0 w-56">
-            <div
-                onClick={() => !disabled && setOpen(!open)}
-                className={`flex items-center w-full h-10 pl-3 pr-8 rounded-lg border text-sm font-semibold bg-white transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-gray-400'} ${open ? 'border-[#7B0F2B] ring-2 ring-[#7B0F2B]/20' : 'border-gray-300'}`}
-            >
-                <Building2 className="w-4 h-4 text-gray-400 mr-2 shrink-0" />
-                <span className="truncate text-gray-700">
-                    {selectedUnit ? selectedUnit.unit_name : "Main Owner (All Units)"}
-                </span>
-                <ChevronDown className={`w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 transition-transform ${open ? 'rotate-180' : ''}`} />
-            </div>
-
-            {open && !disabled && (
-                <div className="absolute top-full mt-1 left-0 w-full z-50 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden">
-                    <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
-                        <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                        <input
-                            autoFocus
-                            type="text"
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search unit..."
-                            className="flex-1 text-sm outline-none bg-transparent"
-                            onClick={(e) => e.stopPropagation()}
-                        />
-                    </div>
-                    <div className="max-h-52 overflow-y-auto">
-                        <button
-                            type="button"
-                            onClick={() => { onChange("ALL"); setOpen(false); setQuery(""); }}
-                            className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors ${selectedId === "ALL" ? "bg-red-50 text-[#7a0f1f] font-bold" : "text-gray-900 font-medium"}`}
-                        >
-                            Main Owner (All Units)
-                        </button>
-                        {filteredUnits.length === 0 ? (
-                            <div className="px-4 py-3 text-sm text-gray-400 text-center">No units found</div>
-                        ) : (
-                            filteredUnits.map((u) => (
-                                <button
-                                    key={u.id}
-                                    type="button"
-                                    onClick={() => { onChange(u.id); setOpen(false); setQuery(""); }}
-                                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors ${String(selectedId) === String(u.id) ? "bg-red-50 text-[#7a0f1f] font-bold" : "text-gray-900 font-medium"}`}
-                                >
-                                    <span className="truncate block">{u.unit_name}</span>
-                                </button>
-                            ))
-                        )}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
-
-export default function MainLedgerPage() {
     // Component State
-    const [owners, setOwners] = useState<Owner[]>([]);
-    const [ownersLoading, setOwnersLoading] = useState(true);
-    const [selectedOwnerId, setSelectedOwnerId] = useState<string | number | null>(null);
-
     const [entries, setEntries] = useState<LedgerEntry[]>([]);
     const [openingBalance, setOpeningBalance] = useState<number>(0);
     const [entriesLoading, setEntriesLoading] = useState(false);
+
+    // We can extract ownername from the response if we really want, but it's SYSTEM
+    const [ownerName, setOwnerName] = useState<string>("SYSTEM");
 
     const [query, setQuery] = useState("");
     const [showExtraColumns, setShowExtraColumns] = useState(false);
@@ -245,35 +62,10 @@ export default function MainLedgerPage() {
     // Filter/Pagination states
     const [currentPage, setCurrentPage] = useState(1);
 
-    // API Fetches
-    useEffect(() => {
-        setOwnersLoading(true);
-        fetch('/api/accountant/maintenance/owners?per_page=all')
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    const rawData = Array.isArray(data.data?.data) ? data.data.data : (Array.isArray(data.data) ? data.data : []);
-                    const mains = rawData.filter((o: Owner) => o.owner_type === "MAIN");
-                    setOwners(mains);
-                    if (initialOwnerId) {
-                        const exists = mains.find(o => String(o.id) === initialOwnerId);
-                        if (exists) setSelectedOwnerId(initialOwnerId);
-                        else if (mains.length > 0) setSelectedOwnerId(mains[0].id);
-                    } else if (mains.length > 0) {
-                        setSelectedOwnerId(mains[0].id);
-                    }
-                }
-            })
-            .catch(err => console.error(err))
-            .finally(() => setOwnersLoading(false));
-    }, []);
-
     const fetchLedger = useCallback(() => {
-        if (!selectedOwnerId) return;
         setEntriesLoading(true);
 
-        // Fetching oldest first as requested
-        let url = `/api/accountant/ledger/mains?owner_id=${selectedOwnerId}&sort=oldest`;
+        const url = `/api/accountant/ledger/system?sort=oldest`;
 
         fetch(url)
             .then(res => res.json())
@@ -281,6 +73,9 @@ export default function MainLedgerPage() {
                 if (data.success) {
                     setEntries(data.data.transactions || []);
                     setOpeningBalance(data.data.openingBalance || 0);
+                    if (data.data.owner?.name) {
+                        setOwnerName(data.data.owner.name);
+                    }
                     setCurrentPage(1); // Reset to page 1 on new fetch
                 } else {
                     setEntries([]);
@@ -289,7 +84,7 @@ export default function MainLedgerPage() {
             })
             .catch(err => console.error(err))
             .finally(() => setEntriesLoading(false));
-    }, [selectedOwnerId]);
+    }, []);
 
     useEffect(() => {
         fetchLedger();
@@ -482,8 +277,8 @@ export default function MainLedgerPage() {
             {/* AppHeader Component */}
             <AppHeader
                 navigation={[]}
-                title="Main Owner Ledger"
-                subtitle="View transaction history and running balances for main owners."
+                title="System Ledger"
+                subtitle="View transaction history and running balances for the system owner."
                 primaryAction={
                     <button className="flex items-center gap-2 px-4 py-2 bg-white text-[#7a0f1f] rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm">
                         <Download className="w-4 h-4" />
@@ -521,15 +316,7 @@ export default function MainLedgerPage() {
                             searchPlaceholder="Search transaction..."
                             onRefresh={fetchLedger}
                             containerMaxWidth="max-w-4xl"
-                        >
-                            {/* Main Owner Filter - Searchable Dropdown */}
-                            <OwnerSelectDropdown
-                                owners={owners}
-                                selectedId={selectedOwnerId}
-                                onChange={setSelectedOwnerId}
-                                loading={ownersLoading}
-                            />
-                        </SharedToolbar>
+                        />
                     </div>
 
                     {/* ── Table ── */}
@@ -539,7 +326,7 @@ export default function MainLedgerPage() {
                             <div>
                                 <h1 className="text-xl font-bold tracking-tight text-[#5f0c18]">ABIC REALTY & CONSULTANCY CORPORATION 2025</h1>
                                 <p className="text-sm font-semibold text-gray-500 mt-1 uppercase">
-                                    {ownersLoading ? "Loading..." : (owners.find(o => String(o.id) === String(selectedOwnerId))?.name ?? "Select Owner")}
+                                    {entriesLoading ? "Loading..." : ownerName}
                                 </p>
                             </div>
                             <div className="flex items-center gap-6 mt-4 md:mt-0 text-right">
@@ -566,6 +353,17 @@ export default function MainLedgerPage() {
                             onPageChange={setCurrentPage}
                             itemName="entries"
                             loading={entriesLoading}
+                            getRowId={(row) => `row-${row.transactionId}`}
+                            highlightRowId={highlightTx ? `row-${highlightTx}` : undefined}
+                            onRowClick={(row) => {
+                                if (!row.otherOwnerType || !row.otherOwnerId) return;
+                                const destinationLedgerType = row.otherOwnerType.toLowerCase();
+                                let targetUrl = `/super/accountant/ledger/${destinationLedgerType}?targetOwnerId=${row.otherOwnerId}&highlightTx=${row.transactionId}`;
+                                if (row.otherUnitId) {
+                                    targetUrl += `&targetUnitId=${row.otherUnitId}`;
+                                }
+                                router.push(targetUrl);
+                            }}
                         />
                     </div>
                 </section>

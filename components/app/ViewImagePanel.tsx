@@ -49,10 +49,12 @@ export default function ViewImagePanel({
 }: ViewImagePanelProps) {
     const [isClosing, setIsClosing] = useState(false);
     const [zoom, setZoom] = useState(1);
+    const [isLoading, setIsLoading] = useState(false);
 
-    // Reset zoom when file changes
+    // Reset zoom + trigger skeleton when file changes
     useEffect(() => {
         setZoom(1);
+        if (file) setIsLoading(true);
     }, [file]);
 
     // Close on Escape
@@ -194,7 +196,17 @@ export default function ViewImagePanel({
                 </div>
 
                 {/* Body */}
-                <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center p-6">
+                <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center p-6 relative">
+                    {/* Skeleton overlay */}
+                    {isLoading && (
+                        <div className="absolute inset-0 bg-gray-100 flex flex-col items-center justify-center gap-4 z-10">
+                            <div className="w-full max-w-2xl px-6 space-y-3">
+                                <div className="h-64 w-full bg-gray-200 rounded-xl animate-pulse" />
+                                <div className="h-4 w-2/3 bg-gray-200 rounded animate-pulse" />
+                                <div className="h-3 w-1/2 bg-gray-200 rounded animate-pulse" />
+                            </div>
+                        </div>
+                    )}
                     {!file ? (
                         <p className="text-gray-400 text-sm">No file selected.</p>
                     ) : showImage ? (
@@ -205,6 +217,8 @@ export default function ViewImagePanel({
                             <img
                                 src={file.src}
                                 alt={file.name}
+                                onLoad={() => setIsLoading(false)}
+                                onError={() => setIsLoading(false)}
                                 className="max-w-full rounded-lg shadow-xl border border-gray-200 object-contain"
                                 style={{ maxHeight: "calc(100vh - 10rem)" }}
                                 draggable={false}
@@ -215,6 +229,7 @@ export default function ViewImagePanel({
                         <iframe
                             src={file.src}
                             title={file.name}
+                            onLoad={() => setIsLoading(false)}
                             className="w-full rounded-lg shadow-xl border border-gray-200 bg-white"
                             style={{ height: "calc(100vh - 10rem)" }}
                         />

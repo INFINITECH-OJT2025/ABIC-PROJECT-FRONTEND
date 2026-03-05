@@ -2,25 +2,19 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
-    ArrowDownCircle,
-    ArrowUpCircle,
     Building2,
-    Calendar,
     ChevronDown,
     Download,
     Eye,
     EyeOff,
-    Filter,
     Search,
     FileText
 } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
 
 import AppHeader from "@/components/app/AppHeader";
-import SummaryBar, { StatPill } from "@/components/app/SummaryBar";
-import DataTable, { DataTableColumn } from "@/components/app/DataTable";
 import DataTableLedge, { InstrumentFilesPopover } from "@/components/app/DataTableLedge";
 import SharedToolbar from "@/components/app/SharedToolbar";
+import { DataTableColumn } from "@/components/app/DataTable";
 
 // ─── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -61,7 +55,6 @@ interface LedgerEntry {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const BORDER = "rgba(0,0,0,0.12)";
-const ACCENT = "#7a0f1f";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -107,7 +100,7 @@ function OwnerSelectDropdown({
             >
                 <Building2 className="w-4 h-4 text-gray-400 mr-2 shrink-0" />
                 <span className="truncate text-gray-700">
-                    {loading ? "Loading owners..." : (selectedOwner?.name ?? "Select Owner...")}
+                    {loading ? "Loading clients..." : (selectedOwner?.name ?? "Select Client...")}
                 </span>
                 <ChevronDown className={`w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 transition-transform ${open ? 'rotate-180' : ''}`} />
             </div>
@@ -121,14 +114,14 @@ function OwnerSelectDropdown({
                             type="text"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search owner..."
+                            placeholder="Search client..."
                             className="flex-1 text-sm outline-none bg-transparent"
                             onClick={(e) => e.stopPropagation()}
                         />
                     </div>
                     <div className="max-h-52 overflow-y-auto">
                         {filteredOwners.length === 0 ? (
-                            <div className="px-4 py-3 text-sm text-gray-400 text-center">No owners found</div>
+                            <div className="px-4 py-3 text-sm text-gray-400 text-center">No clients found</div>
                         ) : (
                             filteredOwners.map((o) => (
                                 <button
@@ -181,7 +174,7 @@ function UnitSelectDropdown({
             >
                 <Building2 className="w-4 h-4 text-gray-400 mr-2 shrink-0" />
                 <span className="truncate text-gray-700">
-                    {selectedUnit ? selectedUnit.unit_name : "Main Owner (All Units)"}
+                    {selectedUnit ? selectedUnit.unit_name : "Client"}
                 </span>
                 <ChevronDown className={`w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 transition-transform ${open ? 'rotate-180' : ''}`} />
             </div>
@@ -206,7 +199,7 @@ function UnitSelectDropdown({
                             onClick={() => { onChange("ALL"); setOpen(false); setQuery(""); }}
                             className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors ${selectedId === "ALL" ? "bg-red-50 text-[#7a0f1f] font-bold" : "text-gray-900 font-medium"}`}
                         >
-                            Main Owner (All Units)
+                            Client
                         </button>
                         {filteredUnits.length === 0 ? (
                             <div className="px-4 py-3 text-sm text-gray-400 text-center">No units found</div>
@@ -229,11 +222,20 @@ function UnitSelectDropdown({
     );
 }
 
-export default function MainLedgerPage() {
+export default function ClientLedgerPage() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const highlightTx = searchParams.get("highlightTx");
+    const [initialOwnerId] = useState(searchParams.get("targetOwnerId"));
+    const [initialUnitId] = useState(searchParams.get("targetUnitId"));
+
     // Component State
     const [owners, setOwners] = useState<Owner[]>([]);
     const [ownersLoading, setOwnersLoading] = useState(true);
     const [selectedOwnerId, setSelectedOwnerId] = useState<string | number | null>(null);
+
+    const [units, setUnits] = useState<Unit[]>([]);
+    const [selectedUnitId, setSelectedUnitId] = useState<string | number>("ALL");
 
     const [entries, setEntries] = useState<LedgerEntry[]>([]);
     const [openingBalance, setOpeningBalance] = useState<number>(0);
@@ -253,14 +255,15 @@ export default function MainLedgerPage() {
             .then(data => {
                 if (data.success) {
                     const rawData = Array.isArray(data.data?.data) ? data.data.data : (Array.isArray(data.data) ? data.data : []);
-                    const mains = rawData.filter((o: Owner) => o.owner_type === "MAIN");
-                    setOwners(mains);
+                    // Filter for CLIENT instead of MAIN
+                    const clients = rawData.filter((o: Owner) => o.owner_type === "CLIENT");
+                    setOwners(clients);
                     if (initialOwnerId) {
-                        const exists = mains.find(o => String(o.id) === initialOwnerId);
+                        const exists = clients.find(o => String(o.id) === initialOwnerId);
                         if (exists) setSelectedOwnerId(initialOwnerId);
-                        else if (mains.length > 0) setSelectedOwnerId(mains[0].id);
-                    } else if (mains.length > 0) {
-                        setSelectedOwnerId(mains[0].id);
+                        else if (clients.length > 0) setSelectedOwnerId(clients[0].id);
+                    } else if (clients.length > 0) {
+                        setSelectedOwnerId(clients[0].id);
                     }
                 }
             })
@@ -268,12 +271,34 @@ export default function MainLedgerPage() {
             .finally(() => setOwnersLoading(false));
     }, []);
 
+    useEffect(() => {
+        if (!selectedOwnerId) return;
+        fetch(`/api/accountant/maintenance/units?owner_id=${selectedOwnerId}&per_page=all`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const rawUnits = Array.isArray(data.data?.data) ? data.data.data : (Array.isArray(data.data) ? data.data : []);
+                    setUnits(rawUnits);
+                    if (initialUnitId && String(selectedOwnerId) === String(initialOwnerId)) {
+                        const exists = rawUnits.find((u: Unit) => String(u.id) === initialUnitId);
+                        if (exists) setSelectedUnitId(initialUnitId);
+                    } else {
+                        setSelectedUnitId("ALL");
+                    }
+                }
+            })
+            .catch(err => console.error(err));
+    }, [selectedOwnerId]);
+
     const fetchLedger = useCallback(() => {
         if (!selectedOwnerId) return;
         setEntriesLoading(true);
 
-        // Fetching oldest first as requested
-        let url = `/api/accountant/ledger/mains?owner_id=${selectedOwnerId}&sort=oldest`;
+        // Fetching from /clients endpoint
+        let url = `/api/accountant/ledger/clients?owner_id=${selectedOwnerId}&sort=oldest`;
+        if (selectedUnitId !== "ALL") {
+            url += `&unit_id=${selectedUnitId}`;
+        }
 
         fetch(url)
             .then(res => res.json())
@@ -289,7 +314,7 @@ export default function MainLedgerPage() {
             })
             .catch(err => console.error(err))
             .finally(() => setEntriesLoading(false));
-    }, [selectedOwnerId]);
+    }, [selectedOwnerId, selectedUnitId]);
 
     useEffect(() => {
         fetchLedger();
@@ -347,7 +372,7 @@ export default function MainLedgerPage() {
         },
         {
             key: "owner",
-            label: "OWNER",
+            label: "ACCOUNT SOURCE",
             align: "center",
             width: "180px",
             minWidth: "180px",
@@ -482,8 +507,8 @@ export default function MainLedgerPage() {
             {/* AppHeader Component */}
             <AppHeader
                 navigation={[]}
-                title="Main Owner Ledger"
-                subtitle="View transaction history and running balances for main owners."
+                title="Client Ledger"
+                subtitle="View transaction history and running balances for clients."
                 primaryAction={
                     <button className="flex items-center gap-2 px-4 py-2 bg-white text-[#7a0f1f] rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm">
                         <Download className="w-4 h-4" />
@@ -522,12 +547,22 @@ export default function MainLedgerPage() {
                             onRefresh={fetchLedger}
                             containerMaxWidth="max-w-4xl"
                         >
-                            {/* Main Owner Filter - Searchable Dropdown */}
+                            {/* Client Filter - Searchable Dropdown */}
                             <OwnerSelectDropdown
                                 owners={owners}
                                 selectedId={selectedOwnerId}
-                                onChange={setSelectedOwnerId}
+                                onChange={(id) => {
+                                    setSelectedOwnerId(id);
+                                    setSelectedUnitId("ALL");
+                                }}
                                 loading={ownersLoading}
+                            />
+
+                            {/* Unit Filter - Smart Dropdown */}
+                            <UnitSelectDropdown
+                                units={units}
+                                selectedId={selectedUnitId}
+                                onChange={setSelectedUnitId}
                             />
                         </SharedToolbar>
                     </div>
@@ -539,7 +574,7 @@ export default function MainLedgerPage() {
                             <div>
                                 <h1 className="text-xl font-bold tracking-tight text-[#5f0c18]">ABIC REALTY & CONSULTANCY CORPORATION 2025</h1>
                                 <p className="text-sm font-semibold text-gray-500 mt-1 uppercase">
-                                    {ownersLoading ? "Loading..." : (owners.find(o => String(o.id) === String(selectedOwnerId))?.name ?? "Select Owner")}
+                                    {ownersLoading ? "Loading..." : (owners.find(o => String(o.id) === String(selectedOwnerId))?.name ?? "Select Client")}
                                 </p>
                             </div>
                             <div className="flex items-center gap-6 mt-4 md:mt-0 text-right">
@@ -566,6 +601,17 @@ export default function MainLedgerPage() {
                             onPageChange={setCurrentPage}
                             itemName="entries"
                             loading={entriesLoading}
+                            getRowId={(row) => `row-${row.transactionId}`}
+                            highlightRowId={highlightTx ? `row-${highlightTx}` : undefined}
+                            onRowClick={(row) => {
+                                if (!row.otherOwnerType || !row.otherOwnerId) return;
+                                const destinationLedgerType = row.otherOwnerType.toLowerCase();
+                                let targetUrl = `/super/accountant/ledger/${destinationLedgerType}?targetOwnerId=${row.otherOwnerId}&highlightTx=${row.transactionId}`;
+                                if (row.otherUnitId) {
+                                    targetUrl += `&targetUnitId=${row.otherUnitId}`;
+                                }
+                                router.push(targetUrl);
+                            }}
                         />
                     </div>
                 </section>
