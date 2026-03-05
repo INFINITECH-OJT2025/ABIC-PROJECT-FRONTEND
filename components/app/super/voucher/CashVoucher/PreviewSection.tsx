@@ -7,7 +7,7 @@ interface PreviewSectionProps {
 
 function PreviewSection({ formData }: PreviewSectionProps) {
     return (
-        <div className="bg-white rounded-lg shadow-md p-4">
+        <div className="bg-white rounded-md shadow-md p-4 mt-5">
             <h2 className="text-xl font-semibold mb-4 text-black">Live Preview</h2>
 
             <div
@@ -32,10 +32,10 @@ function PreviewSection({ formData }: PreviewSectionProps) {
                         <img
                             src="/images/logo/ABIC-LOGO-VOUCHER.png"
                             alt="ABIC Realty Logo"
-                            className="w-[200px] h-[70px] object-contain"
+                            className="h-[100px] w-auto object-contain"
                         />
+                        </div>
                     </div>
-                </div>
 
                 {/* ================= TOP SECTION ================= */}
                 <div className="flex justify-between items-end text-xs px-4 mt-0 mb-3">

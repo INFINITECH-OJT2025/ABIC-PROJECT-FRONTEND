@@ -141,7 +141,7 @@ export default function PrintableView() {
                 <p className="text-white/80 text-sm mt-0.5">Cheque Voucher Creation</p>
               </div>
 
-              <div className="ml-auto">
+              {/* <div className="ml-auto">
                 <button
                   type="button"
                   onClick={prepareVoucher}
@@ -151,7 +151,7 @@ export default function PrintableView() {
                   <RefreshCcw className="w-4 h-4" />
                   {isPreparing ? "Generating..." : "Generate Voucher No"}
                 </button>
-              </div>
+              </div> */}
             </div>
           </div>
         </div>
