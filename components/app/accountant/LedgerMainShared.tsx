@@ -22,7 +22,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import AppHeader from "@/components/app/AppHeader";
 import SummaryBar, { StatPill } from "@/components/app/SummaryBar";
 import DataTable, { DataTableColumn } from "@/components/app/DataTable";
-import DataTableLedge, { InstrumentFilesPopover } from "@/components/app/DataTableLedge";
+import DataTableLedge, { InstrumentFilesPopover, VoucherPreviewButton } from "@/components/app/DataTableLedge";
 import InfoTooltip from "@/components/app/InfoTooltip";
 import SharedToolbar from "@/components/app/SharedToolbar";
 
@@ -57,6 +57,8 @@ interface LedgerEntry {
     outsBalance: number;
     transferGroupId: number | null;
     voucherAttachmentUrl: string | null;
+    voucherFileType: string | null;
+    voucherFileSize: number | null;
     instrumentAttachments: any[];
     fundReference: string | null;
     personInCharge: string | null;
@@ -319,10 +321,18 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
             key: "voucherNo",
             label: "VOUCHER NO.",
             align: "center",
-            width: "150px",
-            minWidth: "150px",
-            maxWidth: "150px",
+            width: "200px",
+            minWidth: "200px",
+            maxWidth: "200px",
             sortable: true,
+            renderCell: (row) => (
+                <VoucherPreviewButton
+                    voucherNo={row.voucherNo}
+                    attachmentUrl={row.voucherAttachmentUrl}
+                    fileType={row.voucherFileType}
+                    fileSize={row.voucherFileSize}
+                />
+            ),
         },
         {
             key: "transType",
@@ -333,11 +343,12 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
             maxWidth: "150px",
             sortable: true,
             renderCell: (row) => {
-                const files: { name: string; url?: string | null; type?: string | null }[] =
+                const files: { name: string; url?: string | null; type?: string | null; size?: number | null }[] =
                     (row.instrumentAttachments ?? []).map((a: any) => ({
                         name: a.instrumentNo ?? a.file_name ?? a.name ?? "—",
                         url: a.attachmentUrl ?? a.file_url ?? a.url ?? null,
-                        type: a.file_type ?? a.mimeType ?? a.mime_type ?? null,
+                        type: a.fileType ?? a.file_type ?? a.mimeType ?? a.mime_type ?? null,
+                        size: a.fileSize ?? a.file_size ?? null,
                     }))
                 if (files.length === 0) return row.transType as string
                 const trigger = (
