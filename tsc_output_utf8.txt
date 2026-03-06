@@ -1,0 +1,3 @@
+﻿components/app/accountant/UnitBudgetsShared.tsx(7,35): error TS2306: File 'C:/laragon/www/abic-project-frontend/components/app/super/accountant/CreateUnitBudgetPanel.tsx' is not a module.
+components/app/super/accountant/OwnerCreateEditPanel.tsx(12,29): error TS2306: File 'C:/laragon/www/abic-project-frontend/components/app/super/accountant/OwnerBudgetsTab.tsx' is not a module.
+components/app/super/accountant/OwnerCreateEditPanel.tsx(13,35): error TS2306: File 'C:/laragon/www/abic-project-frontend/components/app/super/accountant/CreateUnitBudgetPanel.tsx' is not a module.

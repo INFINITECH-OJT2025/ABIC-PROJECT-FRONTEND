@@ -9,6 +9,8 @@ import ConfirmationModal from "@/components/app/ConfirmationModal";
 import DataTable, { DataTableColumn, PaginationMeta } from "@/components/app/DataTable";
 import SharedToolbar from "@/components/app/SharedToolbar";
 import UnitCreateEditPanel, { Unit as UnitRecord } from "@/components/app/super/accountant/UnitCreateEditPanel";
+import OwnerBudgetsTab from "@/components/app/super/accountant/OwnerBudgetsTab";
+import CreateUnitBudgetPanel from "@/components/app/super/accountant/CreateUnitBudgetPanel";
 
 const BORDER = "rgba(0,0,0,0.12)";
 const ACCENT = "#7a0f1f";
@@ -100,6 +102,13 @@ export default function OwnerCreateEditPanel({
     const [unitPanelOpen, setUnitPanelOpen] = useState(false);
     const [selectedUnit, setSelectedUnit] = useState<UnitRecord | null>(null);
 
+    // ── Budget panel state ────────────────────────────────────────────────────
+    const [budgetPanelOpen, setBudgetPanelOpen] = useState(false);
+    const [budgetRefreshTrigger, setBudgetRefreshTrigger] = useState(0);
+
+    // ── Right Column Tab state ────────────────────────────────────────────────
+    const [activeTab, setActiveTab] = useState<"units" | "budgets">("units");
+
     const fetchUnits = useCallback(async () => {
         if (!owner) return;
         setUnitsLoading(true);
@@ -156,6 +165,9 @@ export default function OwnerCreateEditPanel({
             // also close any open unit sub-panel
             setUnitPanelOpen(false);
             setSelectedUnit(null);
+
+            // Reset right column tabs
+            setActiveTab("units");
         }
     }, [open, owner]);
 
@@ -698,25 +710,68 @@ export default function OwnerCreateEditPanel({
                     {/* RIGHT COLUMN: Units List */}
                     {isEdit && (
                         <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-50/30 relative">
-                            {/* Units Header */}
-                            <div className="flex-shrink-0 flex items-center justify-between px-6 pt-6 pb-2 bg-white mt-4">
-                                <div>
-                                    <h3 className="text-base font-bold text-gray-900">Associated Units</h3>
-                                    <p className="text-sm text-gray-500 mt-0.5">Manage spaces and properties assigned to this owner.</p>
-                                </div>
-                                {owner && (owner.owner_type === "MAIN" || owner.owner_type === "SYSTEM") ? null : (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setSelectedUnit(null);
-                                            setUnitPanelOpen(true);
-                                        }}
-                                        className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold text-white hover:opacity-95 transition active:scale-95 shadow-sm"
-                                        style={{ background: ACCENT }}
-                                    >
-                                        <Plus className="w-4 h-4" />
-                                        Add Unit
-                                    </button>
+                            {/* Header with Tabs */}
+                            <div className="flex-shrink-0 flex items-center justify-between px-6 pt-6 pb-0 bg-white border-b border-gray-200">
+                                {owner && (owner.owner_type === "MAIN" || owner.owner_type === "SYSTEM") ? (
+                                    <div className="pb-3">
+                                        <h3 className="text-base font-bold text-gray-900">Associated Units</h3>
+                                        <p className="text-sm text-gray-500 mt-0.5">Manage spaces and properties assigned to this owner.</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex gap-6 relative top-[1px]">
+                                            <button
+                                                onClick={() => setActiveTab("units")}
+                                                className={`pb-3 text-sm font-semibold transition-colors border-b-2 ${activeTab === "units"
+                                                    ? "border-[#7a0f1f] text-[#7a0f1f]"
+                                                    : "border-transparent text-gray-500 hover:text-gray-700"
+                                                    }`}
+                                            >
+                                                Associated Units
+                                                <span className="ml-2 inline-flex items-center justify-center bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                                    {unitsPagination?.total ?? units.length}
+                                                </span>
+                                            </button>
+                                            <button
+                                                onClick={() => setActiveTab("budgets")}
+                                                className={`pb-3 text-sm font-semibold transition-colors border-b-2 ${activeTab === "budgets"
+                                                    ? "border-[#7a0f1f] text-[#7a0f1f]"
+                                                    : "border-transparent text-gray-500 hover:text-gray-700"
+                                                    }`}
+                                            >
+                                                Unit Budgets
+                                            </button>
+                                        </div>
+                                        {activeTab === "units" && (
+                                            <div className="pb-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedUnit(null);
+                                                        setUnitPanelOpen(true);
+                                                    }}
+                                                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold text-white hover:opacity-95 transition active:scale-95 shadow-sm"
+                                                    style={{ background: ACCENT }}
+                                                >
+                                                    <Plus className="w-4 h-4" />
+                                                    Add Unit
+                                                </button>
+                                            </div>
+                                        )}
+                                        {activeTab === "budgets" && (
+                                            <div className="pb-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setBudgetPanelOpen(true)}
+                                                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold text-white hover:opacity-95 transition active:scale-95 shadow-sm"
+                                                    style={{ background: ACCENT }}
+                                                >
+                                                    <Plus className="w-4 h-4" />
+                                                    New Budget
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
 
@@ -739,95 +794,105 @@ export default function OwnerCreateEditPanel({
                                 </div>
                             )}
 
-                            {/* Units Toolbar - Only show if not MAIN/SYSTEM */}
+                            {/* Content - Only show if not MAIN/SYSTEM */}
                             {owner && (owner.owner_type !== "MAIN" && owner.owner_type !== "SYSTEM") && (
-                                <div className="flex-shrink-0 px-6 bg-white border-b border-gray-200 pb-4">
-                                    <SharedToolbar
-                                        searchQuery={unitsSearch}
-                                        onSearchChange={(q) => { setUnitsSearch(q); setUnitsPage(1); }}
-                                        searchPlaceholder="Search units…"
-                                        statusFilter={unitsStatus}
-                                        onStatusChange={(s) => { setUnitsStatus(s); setUnitsPage(1); }}
-                                        onRefresh={fetchUnits}
-                                        statusOptions={[
-                                            { label: "All Status", value: "all" },
-                                            { label: "Active", value: "ACTIVE" },
-                                            { label: "Inactive", value: "INACTIVE" },
-                                            { label: "Suspended", value: "SUSPENDED" },
-                                        ]}
-                                        containerMaxWidth="max-w-full"
-                                    />
-                                </div>
-                            )}
+                                <>
+                                    {activeTab === "units" && (
+                                        <div className="flex-1 flex flex-col min-h-0">
+                                            <div className="flex-shrink-0 px-6 bg-white border-b border-gray-200 pb-4">
+                                                <SharedToolbar
+                                                    searchQuery={unitsSearch}
+                                                    onSearchChange={(q) => { setUnitsSearch(q); setUnitsPage(1); }}
+                                                    searchPlaceholder="Search units…"
+                                                    statusFilter={unitsStatus}
+                                                    onStatusChange={(s) => { setUnitsStatus(s); setUnitsPage(1); }}
+                                                    onRefresh={fetchUnits}
+                                                    statusOptions={[
+                                                        { label: "All Status", value: "all" },
+                                                        { label: "Active", value: "ACTIVE" },
+                                                        { label: "Inactive", value: "INACTIVE" },
+                                                        { label: "Suspended", value: "SUSPENDED" },
+                                                    ]}
+                                                    containerMaxWidth="max-w-full"
+                                                />
+                                            </div>
+                                            <div className="flex-1 overflow-y-auto p-6">
+                                                <DataTable<UnitRow>
+                                                    loading={unitsLoading}
+                                                    rows={units}
+                                                    pagination={unitsPagination}
+                                                    onPageChange={(p) => { setUnitsPage(p); }}
+                                                    itemName="units"
+                                                    emptyTitle="No units assigned"
+                                                    emptyDescription="This owner does not have any attached properties or unit ledgers currently registered in the database."
+                                                    onRowClick={(row) => {
+                                                        setSelectedUnit(row as unknown as UnitRecord);
+                                                        setUnitPanelOpen(true);
+                                                    }}
+                                                    columns={[
+                                                        {
+                                                            key: "avatar",
+                                                            label: "",
+                                                            width: "56px",
+                                                            renderCell: (row) => (
+                                                                <div className="w-9 h-9 rounded-md bg-[#7a0f1f] flex items-center justify-center flex-shrink-0">
+                                                                    <span className="text-sm font-bold text-white">
+                                                                        {row.unit_name?.charAt(0).toUpperCase() ?? "?"}
+                                                                    </span>
+                                                                </div>
+                                                            ),
+                                                        },
+                                                        {
+                                                            key: "unit_name",
+                                                            label: "Unit Name",
+                                                            sortable: true,
+                                                            flex: true,
+                                                            width: "50%",
+                                                        },
+                                                        {
+                                                            key: "building",
+                                                            label: "Property",
+                                                            flex: true,
+                                                            width: "50%",
+                                                            renderCell: (row) => row.property?.name ?? <span className="text-gray-300">—</span>,
+                                                        },
+                                                        {
+                                                            key: "status",
+                                                            label: "Status",
+                                                            width: "110px",
+                                                            align: "center",
+                                                            renderCell: (row) => {
+                                                                const s = row.status?.toUpperCase();
+                                                                const cfg: Record<string, { bg: string; text: string; label: string }> = {
+                                                                    ACTIVE: { bg: "#dcfce7", text: "#166534", label: "Active" },
+                                                                    INACTIVE: { bg: "#f1f5f9", text: "#475569", label: "Inactive" },
+                                                                    SUSPENDED: { bg: "#fef9c3", text: "#854d0e", label: "Suspended" },
+                                                                };
+                                                                const c = cfg[s] ?? { bg: "#f1f5f9", text: "#475569", label: row.status };
+                                                                return (
+                                                                    <span
+                                                                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
+                                                                        style={{ background: c.bg, color: c.text }}
+                                                                    >
+                                                                        {c.label}
+                                                                    </span>
+                                                                );
+                                                            },
+                                                        },
+                                                    ]}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
 
-                            {/* Units Body - Only show if not MAIN/SYSTEM */}
-                            {owner && (owner.owner_type !== "MAIN" && owner.owner_type !== "SYSTEM") && (
-                                <div className="flex-1 overflow-y-auto p-6">
-                                    <DataTable<UnitRow>
-                                        loading={unitsLoading}
-                                        rows={units}
-                                        pagination={unitsPagination}
-                                        onPageChange={(p) => { setUnitsPage(p); }}
-                                        itemName="units"
-                                        emptyTitle="No units assigned"
-                                        emptyDescription="This owner does not have any attached properties or unit ledgers currently registered in the database."
-                                        onRowClick={(row) => {
-                                            setSelectedUnit(row as unknown as UnitRecord);
-                                            setUnitPanelOpen(true);
-                                        }}
-                                        columns={[
-                                            {
-                                                key: "avatar",
-                                                label: "",
-                                                width: "56px",
-                                                renderCell: (row) => (
-                                                    <div className="w-9 h-9 rounded-md bg-[#7a0f1f] flex items-center justify-center flex-shrink-0">
-                                                        <span className="text-sm font-bold text-white">
-                                                            {row.unit_name?.charAt(0).toUpperCase() ?? "?"}
-                                                        </span>
-                                                    </div>
-                                                ),
-                                            },
-                                            {
-                                                key: "unit_name",
-                                                label: "Unit Name",
-                                                sortable: true,
-                                                flex: true,
-                                                width: "50%",
-                                            },
-                                            {
-                                                key: "building",
-                                                label: "Property",
-                                                flex: true,
-                                                width: "50%",
-                                                renderCell: (row) => row.property?.name ?? <span className="text-gray-300">—</span>,
-                                            },
-                                            {
-                                                key: "status",
-                                                label: "Status",
-                                                width: "110px",
-                                                align: "center",
-                                                renderCell: (row) => {
-                                                    const s = row.status?.toUpperCase();
-                                                    const cfg: Record<string, { bg: string; text: string; label: string }> = {
-                                                        ACTIVE: { bg: "#dcfce7", text: "#166534", label: "Active" },
-                                                        INACTIVE: { bg: "#f1f5f9", text: "#475569", label: "Inactive" },
-                                                        SUSPENDED: { bg: "#fef9c3", text: "#854d0e", label: "Suspended" },
-                                                    };
-                                                    const c = cfg[s] ?? { bg: "#f1f5f9", text: "#475569", label: row.status };
-                                                    return (
-                                                        <span
-                                                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
-                                                            style={{ background: c.bg, color: c.text }}
-                                                        >
-                                                            {c.label}
-                                                        </span>
-                                                    );
-                                                },
-                                            },
-                                        ]}
-                                    />
-                                </div>
+                                    {activeTab === "budgets" && (
+                                        <OwnerBudgetsTab
+                                            ownerId={owner.id}
+                                            refreshTrigger={budgetRefreshTrigger}
+                                            onRequestCreate={() => setBudgetPanelOpen(true)}
+                                        />
+                                    )}
+                                </>
                             )}
                         </div>
                     )}
@@ -909,6 +974,19 @@ export default function OwnerCreateEditPanel({
                     fetchUnits();
                 }}
             />
+
+            {/* Slide-over Panel for Creating Budgets */}
+            {owner && (
+                <CreateUnitBudgetPanel
+                    ownerId={owner.id}
+                    open={budgetPanelOpen}
+                    onClose={() => setBudgetPanelOpen(false)}
+                    onCreated={() => {
+                        setBudgetPanelOpen(false);
+                        setBudgetRefreshTrigger(t => t + 1);
+                    }}
+                />
+            )}
         </>
     );
 }

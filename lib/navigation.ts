@@ -99,6 +99,12 @@ export const superAdminNav: NavEntry[] = [
         ],
     },
     {
+        type: "group", label: "UNIT BUDGETS", icon: BanknoteArrowDown, items: [
+            { label: "Client Budgets", href: "/super/accountant/budgets/client", icon: BookOpen },
+            { label: "Company Budgets", href: "/super/accountant/budgets/company", icon: BookOpen },
+        ],
+    },
+    {
         type: "group", label: "MAINTENANCE", icon: Wrench, items: [
             { label: "Banks", href: "/super/accountant/maintenance/banks", icon: Banknote },
             { label: "Owners", href: "/super/accountant/maintenance/owners", icon: User },
@@ -160,6 +166,12 @@ export const accountantNav: NavEntry[] = [
             { label: "Client Ledger", href: "/accountant/ledger/client", icon: BookOpen },
             { label: "Company Ledger", href: "/accountant/ledger/company", icon: BookOpen },
             { label: "System Ledger", href: "/accountant/ledger/system", icon: BookOpen },
+        ],
+    },
+    {
+        type: "group", label: "UNIT BUDGETS", icon: BanknoteArrowDown, items: [
+            { label: "Client Budgets", href: "/accountant/budgets/client", icon: BookOpen },
+            { label: "Company Budgets", href: "/accountant/budgets/company", icon: BookOpen },
         ],
     },
     {
