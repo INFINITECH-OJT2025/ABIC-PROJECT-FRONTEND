@@ -1,5 +1,5 @@
 import VoucherCashVoucherListShared from "@/components/app/accountant/VoucherCashVoucherListShared";
 
 export default function Page() {
-    return <VoucherCashVoucherListShared role="superadmin" />;
+    return <VoucherCashVoucherListShared role="accountant" />;
 }

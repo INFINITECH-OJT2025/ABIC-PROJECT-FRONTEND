@@ -76,7 +76,7 @@ export const superAdminNav: NavEntry[] = [
     { type: "divider" },
     { type: "section", label: "Accountant" },
     { type: "link", label: "ACCOUNTANT PANEL", href: "/super/accountant/accountant-panel", icon: LayoutDashboard, exact: true },
-        {
+    {
         type: "group", label: "VOUCHERS", icon: Banknote, items: [
             { label: "Cash Voucher", href: "/super/accountant/voucher/cash-voucher", icon: Plus },
             { label: "Cheque Voucher", href: "/super/accountant/voucher/cheque-voucher", icon: Plus },
@@ -139,18 +139,26 @@ export const adminNav: NavEntry[] = [
 // ─── Accountant ──────────────────────────────────────────────────────────────
 
 export const accountantNav: NavEntry[] = [
-    { type: "link", label: "DASHBOARD", href: "/accountant", icon: LayoutDashboard, exact: true },
+    { type: "link", label: "DASHBOARD", href: "/accountant/accountant-panel", icon: LayoutDashboard, exact: true },
+    {
+        type: "group", label: "VOUCHERS", icon: Banknote, items: [
+            { label: "Cash Voucher", href: "/accountant/voucher/cash-voucher", icon: Plus },
+            { label: "Cheque Voucher", href: "/accountant/voucher/cheque-voucher", icon: Plus },
+            { label: "Cash Vouchers List", href: "/accountant/voucher/cash-voucher-list", icon: ScrollText },
+            { label: "Cheque Vouchers List", href: "/accountant/voucher/cheque-voucher-list", icon: ScrollText },
+        ],
+    },
     {
         type: "group", label: "TRANSACTIONS", icon: FileText, items: [
             { label: "New Transaction", href: "/accountant/transactions", icon: Plus },
             { label: "Transactions Receipt", href: "/accountant/transaction-receipt", icon: Receipt },
-            { label: "Accountant Log", href: "/accountant/activity-log", icon: ScrollText },
         ],
     },
     {
         type: "group", label: "LEDGER", icon: BookMarked, items: [
             { label: "Main Ledger", href: "/accountant/ledger/main", icon: BookOpen },
             { label: "Client Ledger", href: "/accountant/ledger/client", icon: BookOpen },
+            { label: "Company Ledger", href: "/accountant/ledger/company", icon: BookOpen },
             { label: "System Ledger", href: "/accountant/ledger/system", icon: BookOpen },
         ],
     },

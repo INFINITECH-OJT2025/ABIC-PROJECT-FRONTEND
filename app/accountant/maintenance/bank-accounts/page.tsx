@@ -1,5 +1,5 @@
 import MaintenanceBankAccountsShared from "@/components/app/accountant/MaintenanceBankAccountsShared";
 
 export default function Page() {
-    return <MaintenanceBankAccountsShared role="superadmin" />;
+    return <MaintenanceBankAccountsShared role="accountant" />;
 }
