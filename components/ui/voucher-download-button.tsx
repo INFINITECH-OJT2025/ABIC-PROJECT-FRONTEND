@@ -7,6 +7,8 @@ import ConfirmationModal from "@/components/app/ConfirmationModal";
 import { toast } from "sonner";
 import { Download } from "lucide-react";
 
+const ACCENT = "#7a0f1f";
+
 interface DownloadButtonProps {
   formData: PrintableData;
   onValidate?: () => boolean;
@@ -153,9 +155,11 @@ export default function DownloadButton({
         type="button"
         onClick={handleDownload}
         disabled={disabled}
-        className="w-full px-8 py-2.5 text-sm font-semibold text-white bg-[#7a0f1f] rounded-md hover:bg-[#8b1535] transition-all shadow-md hover:shadow-lg"
+      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 flex-shrink-0"
+      style={{backgroundColor: ACCENT, color: "white"}}
       >
-        {onSave ? "Save & Export Voucher" : "Download Voucher Image"}
+        <Download className="w-4 h-4" />
+        {onSave ? "Save & Export Voucher" : "Download Voucher"}
       </button>
     </>
   );

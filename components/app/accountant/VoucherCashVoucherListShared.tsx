@@ -50,6 +50,7 @@ function CashEditForm({ initialData, onSave, onCancel, isSaving }: CashEditFormP
   const [formError, setFormError] = useState<string | null>(null);
   const hasInitialized = useRef(false);
   const previewRef = useRef<HTMLDivElement>(null);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   const [recentVouchers, setRecentVouchers] = useState<PrintableData[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -154,9 +155,12 @@ function CashEditForm({ initialData, onSave, onCancel, isSaving }: CashEditFormP
     return true;
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!validate()) return;
-    
+    setIsConfirmOpen(true);
+  };
+
+  const confirmSave = async () => {
     let base64Image: string | undefined = undefined;
     if (previewRef.current) {
       const target = previewRef.current.querySelector("#printable-content") as HTMLElement;
@@ -169,6 +173,7 @@ function CashEditForm({ initialData, onSave, onCancel, isSaving }: CashEditFormP
       }
     }
     
+    setIsConfirmOpen(false);
     onSave(formData, base64Image);
   };
 
@@ -481,6 +486,19 @@ function CashEditForm({ initialData, onSave, onCancel, isSaving }: CashEditFormP
           </button>
         </div>
       </div>
+
+      <ConfirmationModal
+        open={isConfirmOpen}
+        onCancel={() => setIsConfirmOpen(false)}
+        onConfirm={confirmSave}
+        title="Update Voucher"
+        message="Are you sure you want to save the changes to this voucher?"
+        confirmLabel="Yes, Update"
+        cancelLabel="Cancel"
+        isConfirming={isSaving}
+        icon={Save}
+        color="#7a0f1f"
+      />
 
       {/* Hidden Preview for Image Generation on Edit */}
       <div ref={previewRef} style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
@@ -987,7 +1005,7 @@ export default function VoucherCashVoucherListShared({ role }: { role: "superadm
         />
 
         <div
-          className="fixed top-0 right-0 h-full max-w-screen-xl max-w-4xl bg-white shadow-2xl z-50 transform transition-all duration-300 ease-in-out"
+          className="fixed top-0 right-0 h-full w-[1200px] max-w-full bg-white shadow-2xl z-50 transform transition-all duration-300 ease-in-out"
           style={{
             animation: isClosing ? "slideOut 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards" : "slideIn 0.4s cubic-bezier(0.32, 0.72, 0, 1)",
             boxShadow: "-8px 0 24px rgba(0,0,0,0.15)",
@@ -995,60 +1013,76 @@ export default function VoucherCashVoucherListShared({ role }: { role: "superadm
         >
           <div className="h-full flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">
-                  {panelMode === "view" ? "Voucher Preview" : "Edit Voucher"}
-                </h2>
-                <p className="text-sm text-gray-500">{selectedVoucher.voucher_no}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                {panelMode === "view" &&
-                  (selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
-                    <button
-                      onClick={() => handleCancelVoucher(selectedVoucher.id)}
-                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-colors bg-red-50 border border-red-200 text-red-700 hover:bg-red-100"
-                      title="Cancel Voucher"
-                    >
-                      <Ban className="w-4 h-4" /> Cancel
-                    </button>
-                  )}
-                <button
-                  onClick={() => setPanelMode(panelMode === "view" ? "edit" : "view")}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                >
-                  {panelMode === "view" ? (
-                    <>
-                      <Edit2 className="w-4 h-4" /> Edit
-                    </>
-                  ) : (
-                    <>
-                      <Eye className="w-4 h-4" /> View
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={closePanel}
-                  className="p-2 rounded-xl hover:bg-gray-200 transition-colors"
-                  aria-label="Close"
-                >
-                  <X className="w-5 h-5 text-gray-600" />
-                </button>
-              </div>
-            </div>
+  <div>
+    <h2 className="text-lg font-semibold text-gray-900">
+      {panelMode === "view" ? "Voucher Preview" : "Edit Voucher"}
+    </h2>
+    <p className="text-sm text-gray-500">{selectedVoucher.voucher_no}</p>
+  </div>
+
+  <div className="flex items-center gap-2">
+    {panelMode === "view" &&
+      (selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
+        <button
+          onClick={() => handleCancelVoucher(selectedVoucher.id)}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-colors bg-red-50 border border-red-200 text-red-700 hover:bg-red-100"
+          title="Cancel Voucher"
+        >
+          <Ban className="w-4 h-4" /> Cancel
+        </button>
+      )}
+
+    {(selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
+      <DownloadButton
+        formData={editFormData}
+        disabled={!editFormData}
+        imageUrl={
+          selectedVoucher.voucher_image
+            ? selectedVoucher.voucher_image.startsWith("http")
+              ? selectedVoucher.voucher_image
+              : `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"}${selectedVoucher.voucher_image}`
+            : undefined
+        }
+      />
+    )}
+
+    {(selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
+      <button
+        onClick={() => setPanelMode(panelMode === "view" ? "edit" : "view")}
+        className="flex items-center gap-2  px-3 py-2 rounded-md text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+        
+      >
+        {panelMode === "view" ? (
+          <>
+            <Edit2 className="w-4 h-4" /> Edit
+          </>
+        ) : (
+          <>
+            <Eye className="w-4 h-4" /> View
+          </>
+        )}
+      </button>
+    )}
+
+    <button
+      onClick={closePanel}
+      className="p-2 rounded-xl hover:bg-gray-200 transition-colors"
+      aria-label="Close"
+    >
+      <X className="w-5 h-5 text-gray-600" />
+    </button>
+  </div>
+</div>
 
             <div className="flex-1 overflow-y-auto bg-gray-100">
               {panelMode === "view" ? (
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-4 gap-3">
+                <div className="p-2">
+                  <div className="flex items-center justify-between mb-2 gap-3">
                     <div>
-                      <h3 className="text-lg font-bold text-gray-900">Voucher View</h3>
+                      <h3 className="text-lg font-bold text-gray-900"></h3>
                     </div>
                     <div className="w-1/3">
-                      <DownloadButton 
-                        formData={editFormData} 
-                        disabled={!editFormData} 
-                        imageUrl={selectedVoucher.voucher_image ? (selectedVoucher.voucher_image.startsWith("http") ? selectedVoucher.voucher_image : `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"}${selectedVoucher.voucher_image}`) : undefined}
-                      />
+                      
                     </div>
                   </div>
 
@@ -1069,13 +1103,13 @@ export default function VoucherCashVoucherListShared({ role }: { role: "superadm
                       </div>
                     </div>
 
-                    <div className="bg-white p-4 overflow-auto max-h-[calc(100vh-210px)] flex justify-center">
+                    <div className="bg-white p-4 overflow-auto max-h-[calc(100vh-170px)] flex justify-center">
                       <div className="mx-auto w-fit">
                         {selectedVoucher.voucher_image ? (
                           <img
                             src={selectedVoucher.voucher_image.startsWith("http") ? selectedVoucher.voucher_image : `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"}${selectedVoucher.voucher_image}`}
                             alt="Cash Voucher"
-                            className="max-w-full h-auto object-contain border border-gray-200 shadow-sm rounded bg-white"
+                            className="w-full max-w-[1090px] aspect-[1090/725] h-auto object-contain border border-gray-200 shadow-sm rounded bg-white"
                           />
                         ) : (
                           <div className="origin-top-left" style={{ transform: `scale(1)` }}>

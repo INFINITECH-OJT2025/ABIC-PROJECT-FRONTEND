@@ -240,7 +240,7 @@ export default function FormSection({
                         setShowSuggestions(true);
                       }}
                       onFocus={() => setShowSuggestions(true)}
-                      onBlur={() => { setTouched(prev => ({ ...prev, paidTo: true })); if (!formData.paidTo) setErrors(prev => ({ ...prev, paidTo: "This field is required." })); setTimeout(() => setShowSuggestions(false), 200); }}
+                      onBlur={() => { setTimeout(() => setShowSuggestions(false), 200); }}
                       id="paidTo"
                       autoComplete="off"
                       className={`${fieldClass} ${touched.paidTo && errors.paidTo ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
@@ -258,7 +258,8 @@ export default function FormSection({
                           <div
                             key={i}
                             className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm flex flex-col"
-                            onClick={() => {
+                            onMouseDown={(e) => {
+                              e.preventDefault();
                               onInputChange("paidTo", s.paidTo || "");
                               if (s.projectDetails) onInputChange("projectDetails", s.projectDetails);
                               if (s.owner) onInputChange("owner", s.owner);
@@ -321,7 +322,7 @@ export default function FormSection({
                       type="date"
                       value={formData.date || ""}
                       onChange={(e) => { onInputChange("date", e.target.value); if (errors.date && e.target.value.trim()) setErrors(prev => { const nv = { ...prev }; delete nv.date; return nv; }); }}
-                      onBlur={() => { setTouched(prev => ({ ...prev, date: true })); if (!formData.date) setErrors(prev => ({ ...prev, date: "This field is required." })); }} id="date"
+                      id="date"
                       className={`${fieldClass} ${touched.date && errors.date ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                     />
                   </div>
@@ -348,7 +349,7 @@ export default function FormSection({
                     <textarea
                       value={formData.purpose ?? ""}
                       onChange={(e) => { onInputChange("purpose", e.target.value.slice(0, 350)); if (errors.purpose && e.target.value.trim()) setErrors(prev => { const nv = { ...prev }; delete nv.purpose; return nv; }); }}
-                      onBlur={() => { setTouched(prev => ({ ...prev, purpose: true })); if (!formData.purpose) setErrors(prev => ({ ...prev, purpose: "This field is required." })); }} id="purpose"
+                      id="purpose"
                       maxLength={350}
                       className={`${textareaClass} ${touched.purpose && errors.purpose ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                       placeholder="Transaction purpose"
@@ -369,7 +370,7 @@ export default function FormSection({
                     <textarea
                       value={formData.note ?? ""}
                       onChange={(e) => { onInputChange("note", e.target.value.slice(0, 150)); }}
-                      onBlur={() => { setTouched(prev => ({ ...prev, note: true })); }} id="note"
+                      id="note"
                       maxLength={150}
                       className={textareaClass}
                       placeholder="Additional notes"
@@ -392,7 +393,7 @@ export default function FormSection({
                       type="text"
                       value={formData.accountName ?? ""}
                       onChange={(e) => { onInputChange("accountName", e.target.value); }}
-                      onBlur={() => { setTouched(prev => ({ ...prev, accountName: true })); }} id="accountName"
+                      id="accountName"
                       className={fieldClass}
                     />
                   </div>
@@ -410,7 +411,7 @@ export default function FormSection({
                         type="date"
                         value={formData.checkDate || ""}
                         onChange={(e) => { onInputChange("checkDate", e.target.value); }}
-                        onBlur={() => { setTouched(prev => ({ ...prev, checkDate: true })); }} id="checkDate"
+                        id="checkDate"
                         className={fieldClass}
                       />
                     </div>
@@ -430,7 +431,7 @@ export default function FormSection({
                           const val = e.target.value.replace(/\D/g, "");
                           onInputChange("checkNo", val);
                         }}
-                        onBlur={() => { setTouched(prev => ({ ...prev, checkNo: true })); }} id="checkNo"
+                        id="checkNo"
                         className={fieldClass}
                       />
                     </div>
@@ -454,7 +455,7 @@ export default function FormSection({
                           const val = e.target.value.replace(/[^0-9.]/g, "");
                           onInputChange("amount", val);
                         }}
-                        onBlur={() => { setTouched(prev => ({ ...prev, amount: true })); if (!formData.amount) setErrors(prev => ({ ...prev, amount: "This field is required." })); }} id="amount"
+                        id="amount"
                         className={`${amountFieldClass} ${touched.amount && errors.amount ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                         placeholder="0.00"
                       />
@@ -478,7 +479,7 @@ export default function FormSection({
                           const val = e.target.value.replace(/\D/g, "");
                           onInputChange("accountNumber", val);
                         }}
-                        onBlur={() => { setTouched(prev => ({ ...prev, accountNumber: true })); }} id="accountNumber"
+                        id="accountNumber"
                         className={fieldClass}
                       />
                     </div>
@@ -502,7 +503,7 @@ export default function FormSection({
                     type="text"
                     value={formData.projectDetails ?? ""}
                     onChange={(e) => { onInputChange("projectDetails", e.target.value); }}
-                    onBlur={() => { setTouched(prev => ({ ...prev, projectDetails: true })); }} id="projectDetails"
+                    id="projectDetails"
                     className={fieldClass}
                     placeholder="Project title or details"
                   />
@@ -523,7 +524,7 @@ export default function FormSection({
                       setShowOwnerSuggestions(true);
                     }}
                     onFocus={() => setShowOwnerSuggestions(true)}
-                    onBlur={() => { setTouched(prev => ({ ...prev, owner: true })); setTimeout(() => setShowOwnerSuggestions(false), 200); }}
+                    onBlur={() => { setTimeout(() => setShowOwnerSuggestions(false), 200); }}
                     id="owner"
                     autoComplete="off"
                     className={fieldClass}
@@ -538,7 +539,8 @@ export default function FormSection({
                         <div
                           key={i}
                           className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm flex flex-col"
-                          onClick={() => {
+                          onMouseDown={(e) => {
+                            e.preventDefault();
                             onInputChange("owner", o.name);
                             setShowOwnerSuggestions(false);
                             setErrors(prev => {
@@ -631,7 +633,7 @@ export default function FormSection({
                     type="date"
                     value={formData.receivedFromDate || ""}
                     onChange={(e) => { onInputChange("receivedFromDate", e.target.value); if (errors.receivedFromDate && e.target.value.trim()) setErrors(prev => { const nv = { ...prev }; delete nv.receivedFromDate; return nv; }); }}
-                    onBlur={() => { setTouched(prev => ({ ...prev, receivedFromDate: true })); if (!formData.receivedFromDate) setErrors(prev => ({ ...prev, receivedFromDate: "This field is required." })); }} id="receivedFromDate"
+                    id="receivedFromDate"
                     className={`${fieldClass} ${touched.receivedFromDate && errors.receivedFromDate ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                   />
                 </div>
@@ -709,7 +711,7 @@ export default function FormSection({
                     type="date"
                     value={formData.approvedByDate || ""}
                     onChange={(e) => { onInputChange("approvedByDate", e.target.value); if (errors.approvedByDate && e.target.value.trim()) setErrors(prev => { const nv = { ...prev }; delete nv.approvedByDate; return nv; }); }}
-                    onBlur={() => { setTouched(prev => ({ ...prev, approvedByDate: true })); if (!formData.approvedByDate) setErrors(prev => ({ ...prev, approvedByDate: "This field is required." })); }} id="approvedByDate"
+                    id="approvedByDate"
                     className={`${fieldClass} ${touched.approvedByDate && errors.approvedByDate ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                   />
                 </div>

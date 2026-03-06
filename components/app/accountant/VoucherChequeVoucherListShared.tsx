@@ -51,6 +51,7 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
   const [formError, setFormError] = useState<string | null>(null);
   const hasInitialized = useRef(false);
   const previewRef = useRef<HTMLDivElement>(null);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   const [recentVouchers, setRecentVouchers] = useState<PrintableData[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -162,9 +163,12 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
     return true;
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!validate()) return;
-    
+    setIsConfirmOpen(true);
+  };
+
+  const confirmSave = async () => {
     let base64Image: string | undefined = undefined;
     if (previewRef.current) {
       const target = previewRef.current.querySelector("#printable-content") as HTMLElement;
@@ -177,6 +181,7 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
       }
     }
     
+    setIsConfirmOpen(false);
     onSave(formData, base64Image);
   };
 
@@ -531,6 +536,19 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
           </button>
         </div>
       </div>
+
+      <ConfirmationModal
+        open={isConfirmOpen}
+        onCancel={() => setIsConfirmOpen(false)}
+        onConfirm={confirmSave}
+        title="Update Voucher"
+        message="Are you sure you want to save the changes to this voucher?"
+        confirmLabel="Yes, Update"
+        cancelLabel="Cancel"
+        isConfirming={isSaving}
+        icon={Save}
+        color="#7a0f1f"
+      />
 
       {/* Hidden Preview for Image Generation on Edit */}
       <div ref={previewRef} style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
@@ -1059,7 +1077,7 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
           aria-hidden="true"
         />
         <div
-          className="fixed top-0 right-0 h-full max-w-screen-xl max-w-4xl bg-white shadow-2xl z-50 transform transition-all duration-300 ease-in-out"
+          className="fixed top-0 right-0 h-full w-[1200px] max-w-full bg-white shadow-2xl z-50 transform transition-all duration-300 ease-in-out"
           style={{
             animation: isClosing ? "slideOut 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards" : "slideIn 0.4s cubic-bezier(0.32, 0.72, 0, 1)",
             boxShadow: "-8px 0 24px rgba(0,0,0,0.15)",
@@ -1084,21 +1102,30 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
                       <Ban className="w-4 h-4" /> Cancel
                     </button>
                   )}
-                <button
-                  onClick={() => setPanelMode(panelMode === "view" ? "edit" : "view")}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                {(selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
+                  <DownloadButton 
+                    formData={editFormData} 
+                    disabled={!editFormData} 
+                    imageUrl={selectedVoucher.voucher_image ? (selectedVoucher.voucher_image.startsWith("http") ? selectedVoucher.voucher_image : `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"}${selectedVoucher.voucher_image}`) : undefined}
+                  />
+                )}
+                {(selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
+                  <button
+                    onClick={() => setPanelMode(panelMode === "view" ? "edit" : "view")}
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
 
-                >
-                  {panelMode === "view" ? (
-                    <>
-                      <Edit2 className="w-4 h-4" /> Edit
-                    </>
-                  ) : (
-                    <>
-                      <Eye className="w-4 h-4" /> View
-                    </>
-                  )}
-                </button>
+                  >
+                    {panelMode === "view" ? (
+                      <>
+                        <Edit2 className="w-4 h-4" /> Edit
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="w-4 h-4" /> View
+                      </>
+                    )}
+                  </button>
+                )}
                 <button
                   onClick={closePanel}
                   className="p-2 rounded-xl hover:bg-gray-200 transition-colors"
@@ -1111,17 +1138,13 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
 
             <div className="flex-1 overflow-y-auto bg-gray-100">
               {panelMode === "view" ? (
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-4 gap-3">
+                <div className="p-2">
+                  <div className="flex items-center justify-between mb-2 gap-3">
                     <div>
-                      <h3 className="text-lg font-bold text-gray-900">Voucher View</h3>
+                      <h3 className="text-lg font-bold text-gray-900"></h3>
                     </div>
                     <div className="w-1/3">
-                      <DownloadButton 
-                        formData={editFormData} 
-                        disabled={!editFormData} 
-                        imageUrl={selectedVoucher.voucher_image ? (selectedVoucher.voucher_image.startsWith("http") ? selectedVoucher.voucher_image : `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"}${selectedVoucher.voucher_image}`) : undefined}
-                      />
+                      
                     </div>
                   </div>
 
@@ -1142,13 +1165,13 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
                       </div>
                     </div>
 
-                    <div className="bg-white p-4 overflow-auto max-h-[calc(100vh-210px)] flex justify-center">
+                    <div className="bg-white p-4 overflow-auto max-h-[calc(100vh-180px)] flex justify-center">
                       <div className="mx-auto w-fit">
                         {selectedVoucher.voucher_image ? (
                           <img
                             src={selectedVoucher.voucher_image.startsWith("http") ? selectedVoucher.voucher_image : `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"}${selectedVoucher.voucher_image}`}
                             alt="Cheque Voucher"
-                            className="max-w-full h-auto object-contain border border-gray-200 shadow-sm rounded bg-white"
+                            className="w-full max-w-[1090px] aspect-[1090/725] h-auto object-contain border border-gray-200 shadow-sm rounded bg-white"
                           />
                         ) : (
                           <div className="origin-top-left" style={{ transform: `scale(1)` }}>
