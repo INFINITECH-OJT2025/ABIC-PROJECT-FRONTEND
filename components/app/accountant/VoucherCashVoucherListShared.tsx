@@ -881,7 +881,7 @@ export default function VoucherCashVoucherListShared({ role }: { role: "superadm
     []
   );
 
-  const confirmCancelVoucher = useCallback(async () => {
+  const confirmCancelVoucher = async () => {
     if (!voucherToCancel) return;
 
     try {
@@ -901,13 +901,16 @@ export default function VoucherCashVoucherListShared({ role }: { role: "superadm
       setIsCancelModalOpen(false);
       setVoucherToCancel(null);
       fetchVouchers();
+      if (isPanelOpen) {
+        closePanel();
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to cancel voucher.";
       toast.error(message);
     } finally {
       setIsCancelling(false);
     }
-  }, [voucherToCancel, fetchVouchers]);
+  };
 
   const tableColumns: DataTableColumn<CashVoucher>[] = useMemo(() => [
     {
@@ -991,7 +994,7 @@ export default function VoucherCashVoucherListShared({ role }: { role: "superadm
   // =========================
   // Side Panel
   // =========================
-  const VoucherSidePanel = () => {
+  const renderSidePanel = () => {
     // If we're not open and not closing, render nothing
     if (!isPanelOpen && !isClosing) return null;
     if (!selectedVoucher || !editFormData) return null;
@@ -1013,66 +1016,66 @@ export default function VoucherCashVoucherListShared({ role }: { role: "superadm
         >
           <div className="h-full flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
-  <div>
-    <h2 className="text-lg font-semibold text-gray-900">
-      {panelMode === "view" ? "Voucher Preview" : "Edit Voucher"}
-    </h2>
-    <p className="text-sm text-gray-500">{selectedVoucher.voucher_no}</p>
-  </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {panelMode === "view" ? "Voucher Preview" : "Edit Voucher"}
+                </h2>
+                <p className="text-sm text-gray-500">{selectedVoucher.voucher_no}</p>
+              </div>
 
-  <div className="flex items-center gap-2">
-    {panelMode === "view" &&
-      (selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
-        <button
-          onClick={() => handleCancelVoucher(selectedVoucher.id)}
-          className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-colors bg-red-50 border border-red-200 text-red-700 hover:bg-red-100"
-          title="Cancel Voucher"
-        >
-          <Ban className="w-4 h-4" /> Cancel
-        </button>
-      )}
+              <div className="flex items-center gap-2">
+                {panelMode === "view" &&
+                  (selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
+                    <button
+                      onClick={() => handleCancelVoucher(selectedVoucher.id)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-colors bg-red-50 border border-red-200 text-red-700 hover:bg-red-100"
+                      title="Cancel Voucher"
+                    >
+                      <Ban className="w-4 h-4" /> Cancel
+                    </button>
+                  )}
 
-    {(selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
-      <DownloadButton
-        formData={editFormData}
-        disabled={!editFormData}
-        imageUrl={
-          selectedVoucher.voucher_image
-            ? selectedVoucher.voucher_image.startsWith("http")
-              ? selectedVoucher.voucher_image
-              : `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"}${selectedVoucher.voucher_image}`
-            : undefined
-        }
-      />
-    )}
+                {(selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
+                  <DownloadButton
+                    formData={editFormData}
+                    disabled={!editFormData}
+                    imageUrl={
+                      selectedVoucher.voucher_image
+                        ? selectedVoucher.voucher_image.startsWith("http")
+                          ? selectedVoucher.voucher_image
+                          : `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"}${selectedVoucher.voucher_image}`
+                        : undefined
+                    }
+                  />
+                )}
 
-    {(selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
-      <button
-        onClick={() => setPanelMode(panelMode === "view" ? "edit" : "view")}
-        className="flex items-center gap-2  px-3 py-2 rounded-md text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-        
-      >
-        {panelMode === "view" ? (
-          <>
-            <Edit2 className="w-4 h-4" /> Edit
-          </>
-        ) : (
-          <>
-            <Eye className="w-4 h-4" /> View
-          </>
-        )}
-      </button>
-    )}
+                {(selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
+                  <button
+                    onClick={() => setPanelMode(panelMode === "view" ? "edit" : "view")}
+                    className="flex items-center gap-2  px-3 py-2 rounded-md text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                    
+                  >
+                    {panelMode === "view" ? (
+                      <>
+                        <Edit2 className="w-4 h-4" /> Edit
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="w-4 h-4" /> View
+                      </>
+                    )}
+                  </button>
+                )}
 
-    <button
-      onClick={closePanel}
-      className="p-2 rounded-xl hover:bg-gray-200 transition-colors"
-      aria-label="Close"
-    >
-      <X className="w-5 h-5 text-gray-600" />
-    </button>
-  </div>
-</div>
+                <button
+                  onClick={closePanel}
+                  className="p-2 rounded-xl hover:bg-gray-200 transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5 text-gray-600" />
+                </button>
+              </div>
+            </div>
 
             <div className="flex-1 overflow-y-auto bg-gray-100">
               {panelMode === "view" ? (
@@ -1238,7 +1241,7 @@ export default function VoucherCashVoucherListShared({ role }: { role: "superadm
         </section>
       </div>
 
-      <VoucherSidePanel />
+      {renderSidePanel()}
 
       <style jsx>{`
         @keyframes slideIn {

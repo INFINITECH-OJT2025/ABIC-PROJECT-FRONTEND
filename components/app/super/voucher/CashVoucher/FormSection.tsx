@@ -100,8 +100,6 @@ export default function FormSection({
         { key: "date", id: "date", label: "Date" },
         { key: "purpose", id: "purpose", label: "Purpose" },
         { key: "amount", id: "amount", label: "Amount" },
-        { key: "receivedFromDate", id: "receivedFromDate", label: "Received Date" },
-        { key: "approvedByDate", id: "approvedByDate", label: "Approved Date" },
       ] as const,
     []
   );
@@ -118,25 +116,11 @@ export default function FormSection({
       }
     }
 
-    const hasReceivedSig = formData.receivedFromSignature && formData.receivedFromSignature !== "/images/voucher/signature/ReceivedSignature.png";
-    if (!hasReceivedSig) {
-      newErrors.receivedFromSignature = "Received By Signature is required.";
-      isValid = false;
-    }
-
-    const hasApprovedSig = formData.approvedBySignature && formData.approvedBySignature !== "/images/voucher/signature/ApprovedSignature.png";
-    if (!hasApprovedSig) {
-      newErrors.approvedBySignature = "Approved By Signature is required.";
-      isValid = false;
-    }
-
     setErrors(newErrors);
 
     // Mark everything touched when trying to save
     const allTouched: Record<string, boolean> = {};
     for (const field of requiredFields) allTouched[field.key] = true;
-    allTouched.receivedFromSignature = true;
-    allTouched.approvedBySignature = true;
     setTouched(allTouched);
 
     if (!isValid) {
