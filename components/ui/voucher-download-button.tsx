@@ -13,6 +13,7 @@ interface DownloadButtonProps {
   disabled?: boolean;
   onSave?: (base64Image: string) => Promise<void>;
   onSuccess?: () => void;
+  imageUrl?: string | null;
 }
 
 export default function DownloadButton({
@@ -21,6 +22,7 @@ export default function DownloadButton({
   disabled,
   onSave,
   onSuccess,
+  imageUrl,
 }: DownloadButtonProps) {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -35,8 +37,36 @@ export default function DownloadButton({
     try {
       setIsExporting(true);
 
+      if (imageUrl && !onSave) {
+        try {
+          // Bypassing CORS with Next.js local proxy
+          const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+          const response = await fetch(proxyUrl);
+          if (!response.ok) throw new Error("Network response was not ok");
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          
+          const link = document.createElement("a");
+          link.download = `${formData.voucherNo || "voucher"}.png`;
+          link.href = objectUrl;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          URL.revokeObjectURL(objectUrl);
+          
+          setIsConfirmOpen(false);
+          toast.success("Image downloaded successfully.");
+          if (onSuccess) onSuccess();
+          return;
+        } catch (err) {
+          console.error("Failed to fetch existing image, falling back to HTML capture if available.", err);
+          // If fetch fails, we can fall through and try to capture IF the element exists... but if we don't have the element, it will fail.
+        }
+      }
+
       const element = document.getElementById("printable-content");
-      if (!element) throw new Error("Printable content was not found.");
+      if (!element) throw new Error("Printable content was not found to export.");
 
       const originalDataUrl = await htmlToImage.toPng(element, {
         cacheBust: true,

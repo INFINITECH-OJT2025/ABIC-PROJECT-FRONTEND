@@ -1117,7 +1117,11 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
                       <h3 className="text-lg font-bold text-gray-900">Voucher View</h3>
                     </div>
                     <div className="w-1/3">
-                      <DownloadButton formData={editFormData} disabled={!editFormData} />
+                      <DownloadButton 
+                        formData={editFormData} 
+                        disabled={!editFormData} 
+                        imageUrl={selectedVoucher.voucher_image ? (selectedVoucher.voucher_image.startsWith("http") ? selectedVoucher.voucher_image : `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"}${selectedVoucher.voucher_image}`) : undefined}
+                      />
                     </div>
                   </div>
 
