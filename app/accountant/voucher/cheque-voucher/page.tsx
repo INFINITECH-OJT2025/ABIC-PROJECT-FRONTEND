@@ -1,5 +1,5 @@
 import VoucherChequeVoucherShared from "@/components/app/accountant/VoucherChequeVoucherShared";
 
 export default function Page() {
-    return <VoucherChequeVoucherShared role="superadmin" />;
+    return <VoucherChequeVoucherShared role="accountant" />;
 }

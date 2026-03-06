@@ -1,5 +1,5 @@
 import LedgerClientShared from "@/components/app/accountant/LedgerClientShared";
 
 export default function Page() {
-    return <LedgerClientShared role="superadmin" />;
+    return <LedgerClientShared role="accountant" />;
 }
