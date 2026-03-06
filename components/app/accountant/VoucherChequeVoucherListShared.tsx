@@ -948,7 +948,7 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
     []
   );
 
-  const confirmCancelVoucher = useCallback(async () => {
+  const confirmCancelVoucher = async () => {
     if (!voucherToCancel) return;
 
     try {
@@ -968,13 +968,16 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
       setIsCancelModalOpen(false);
       setVoucherToCancel(null);
       fetchVouchers();
+      if (isPanelOpen) {
+        closePanel();
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to cancel voucher.";
       toast.error(message);
     } finally {
       setIsCancelling(false);
     }
-  }, [voucherToCancel, fetchVouchers]);
+  };
 
   const tableColumns: DataTableColumn<ChequeVoucher>[] = useMemo(() => [
     {
@@ -1064,7 +1067,7 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
 
   // Side Panel
   // =========================
-  const VoucherSidePanel = () => {
+  const renderSidePanel = () => {
     // If we're not open and not closing, render nothing
     if (!isPanelOpen && !isClosing) return null;
     if (!selectedVoucher || !editFormData) return null;
@@ -1303,7 +1306,7 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
         </section>
       </div>
 
-      <VoucherSidePanel />
+      {renderSidePanel()}
 
       <style jsx>{`
         @keyframes slideIn {

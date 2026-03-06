@@ -155,8 +155,7 @@ export default function DownloadButton({
         type="button"
         onClick={handleDownload}
         disabled={disabled}
-      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 flex-shrink-0"
-      style={{backgroundColor: ACCENT, color: "white"}}
+className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"      style={{backgroundColor: ACCENT, color: "white"}}
       >
         <Download className="w-4 h-4" />
         {onSave ? "Save & Export Voucher" : "Download Voucher"}
