@@ -11,7 +11,7 @@ interface DownloadButtonProps {
   formData: PrintableData;
   onValidate?: () => boolean;
   disabled?: boolean;
-  onSave?: () => Promise<void>;
+  onSave?: (base64Image: string) => Promise<void>;
   onSuccess?: () => void;
 }
 
@@ -34,10 +34,6 @@ export default function DownloadButton({
   const confirmDownload = useCallback(async () => {
     try {
       setIsExporting(true);
-
-      if (onSave) {
-        await onSave();
-      }
 
       const element = document.getElementById("printable-content");
       if (!element) throw new Error("Printable content was not found.");
@@ -89,6 +85,10 @@ export default function DownloadButton({
         img.onerror = () => reject(new Error("Failed to generate image."));
         img.src = originalDataUrl;
       });
+
+      if (onSave) {
+        await onSave(finalImage);
+      }
 
       const link = document.createElement("a");
       link.download = `${formData.voucherNo || "voucher"}.png`;

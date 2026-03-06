@@ -22,6 +22,7 @@ import { toast } from "sonner";
 
 import ChequeVoucherPreviewSection from "@/components/app/super/voucher/ChequeVoucher/PreviewSection";
 import type { PrintableData } from "@/components/app/super/voucher/ChequeVoucher/types";
+import { toPng } from "html-to-image";
 
 import DataTable, { DataTableColumn } from "@/components/app/DataTable";
 import EmptyState from "@/components/app/EmptyState";
@@ -40,7 +41,7 @@ const ACCENT = "#7a0f1f";
 // =========================
 interface ChequeEditFormProps {
   initialData: PrintableData;
-  onSave: (data: PrintableData) => void;
+  onSave: (data: PrintableData, base64Image?: string) => void;
   onCancel: () => void;
   isSaving: boolean;
 }
@@ -49,6 +50,7 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
   const [formData, setFormData] = useState<PrintableData>(initialData);
   const [formError, setFormError] = useState<string | null>(null);
   const hasInitialized = useRef(false);
+  const previewRef = useRef<HTMLDivElement>(null);
 
   const [recentVouchers, setRecentVouchers] = useState<PrintableData[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -160,9 +162,22 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
     return true;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return;
-    onSave(formData);
+    
+    let base64Image: string | undefined = undefined;
+    if (previewRef.current) {
+      const target = previewRef.current.querySelector("#printable-content") as HTMLElement;
+      if (target) {
+        try {
+          base64Image = await toPng(target, { cacheBust: true, pixelRatio: 2 });
+        } catch (error) {
+          console.error("Failed to generate image:", error);
+        }
+      }
+    }
+    
+    onSave(formData, base64Image);
   };
 
   return (
@@ -516,6 +531,11 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
           </button>
         </div>
       </div>
+
+      {/* Hidden Preview for Image Generation on Edit */}
+      <div ref={previewRef} style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
+        <ChequeVoucherPreviewSection formData={formData} />
+      </div>
     </div>
   );
 }
@@ -545,6 +565,7 @@ interface ChequeVoucher {
   account_number?: string;
   received_by_signature_url?: string;
   approved_by_signature_url?: string;
+  voucher_image?: string;
 }
 
 type SortField = "date" | "voucher_no" | "paid_to" | "total_amount" | "check_no";
@@ -585,23 +606,27 @@ const statusPill = (status: string) => {
 };
 
 // ✅ Mini-preview thumbnail for card top
-function ChequeVoucherCardPreview({ data, scale = 0.55 }: { data: PrintableData; scale?: number }) {
+function ChequeVoucherCardPreview({ data, imageUrl, scale = 0.55 }: { data: PrintableData; imageUrl?: string; scale?: number }) {
   return (
-    <div className="relative h-full w-full overflow-hidden bg-gray-50">
+    <div className="relative h-full w-full overflow-hidden bg-gray-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-gradient-to-b from-white to-gray-50" />
 
-      <div className="absolute inset-0 flex items-start justify-center pt-3">
-        <div
-          className="origin-top"
-          style={{
-            transform: `scale(${scale})`,
-            width: "fit-content",
-            pointerEvents: "none",
-          }}
-        >
-          <ChequeVoucherPreviewSection formData={data} />
+      {imageUrl ? (
+        <img src={imageUrl} alt="Thumbnail preview" className="relative z-10 w-full h-full object-contain p-2 shadow-sm border border-gray-100 bg-white" />
+      ) : (
+        <div className="absolute inset-0 flex items-start justify-center pt-3">
+          <div
+            className="origin-top"
+            style={{
+              transform: `scale(${scale})`,
+              width: "fit-content",
+              pointerEvents: "none",
+            }}
+          >
+            <ChequeVoucherPreviewSection formData={data} />
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-gray-50 to-transparent" />
     </div>
@@ -838,7 +863,7 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
   };
 
   const handleSaveVoucher = useCallback(
-    async (formData: PrintableData) => {
+    async (formData: PrintableData, base64Image?: string) => {
       if (!selectedVoucher) return;
 
       try {
@@ -864,6 +889,7 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
               ? null
               : formData.approvedBySignature,
           approved_by_date: formData.approvedByDate || null,
+          ...(base64Image && { voucher_image: base64Image }),
           check_date: formData.checkDate || null,
           check_no: formData.checkNo || null,
           account_name: formData.accountName || null,
@@ -1112,11 +1138,19 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
                       </div>
                     </div>
 
-                    <div className="bg-white p-4 overflow-auto max-h-[calc(100vh-210px)]">
+                    <div className="bg-white p-4 overflow-auto max-h-[calc(100vh-210px)] flex justify-center">
                       <div className="mx-auto w-fit">
-                        <div className="origin-top-left" style={{ transform: `scale(1)` }}>
-                          <ChequeVoucherPreviewSection formData={editFormData} />
-                        </div>
+                        {selectedVoucher.voucher_image ? (
+                          <img
+                            src={selectedVoucher.voucher_image.startsWith("http") ? selectedVoucher.voucher_image : `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"}${selectedVoucher.voucher_image}`}
+                            alt="Cheque Voucher"
+                            className="max-w-full h-auto object-contain border border-gray-200 shadow-sm rounded bg-white"
+                          />
+                        ) : (
+                          <div className="origin-top-left" style={{ transform: `scale(1)` }}>
+                            <ChequeVoucherPreviewSection formData={editFormData} />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

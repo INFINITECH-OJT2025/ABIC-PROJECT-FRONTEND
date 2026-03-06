@@ -163,7 +163,7 @@ export default function FormSection({
     return isValid;
   }, [formData, requiredFields]);
 
-  const saveVoucherToDatabase = useCallback(async () => {
+  const saveVoucherToDatabase = useCallback(async (base64Image: string) => {
     const payload = {
       voucher_no: formData.voucherNo,
       paid_to: formData.paidTo,
@@ -189,6 +189,7 @@ export default function FormSection({
           ? null
           : formData.approvedBySignature,
       approved_by_date: formData.approvedByDate || null,
+      voucher_image: base64Image,
     };
 
     const res = await fetch("/api/accountant/vouchers/cheque", {
