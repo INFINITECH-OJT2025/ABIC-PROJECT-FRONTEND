@@ -11,15 +11,15 @@ const ACCENT = "#7a0f1f";
 const BORDER = "rgba(0,0,0,0.12)";
 
 function SectionCard({ title, children, icon, className = "" }: { title: string; children: React.ReactNode; icon?: React.ReactNode; className?: string }) {
-    return (
-        <div className={`rounded-md border bg-white shadow-sm relative ${className}`} style={{ borderColor: BORDER }}>
-            <div className="flex items-center gap-3 px-6 py-4 border-b bg-gray-50/60 rounded-t-xl" style={{ borderColor: BORDER }}>
-                {icon && <span className="text-[#7a0f1f]">{icon}</span>}
-                <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">{title}</h3>
-            </div>
-            <div className="px-6 py-5">{children}</div>
-        </div>
-    );
+  return (
+    <div className={`rounded-md border bg-white shadow-sm relative ${className}`} style={{ borderColor: BORDER }}>
+      <div className="flex items-center gap-3 px-6 py-4 border-b bg-gray-50/60 rounded-t-xl" style={{ borderColor: BORDER }}>
+        {icon && <span className="text-[#7a0f1f]">{icon}</span>}
+        <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">{title}</h3>
+      </div>
+      <div className="px-6 py-5">{children}</div>
+    </div>
+  );
 }
 
 interface FormSectionProps {
@@ -40,7 +40,7 @@ export default function FormSection({
 
   const fieldClass =
     "w-full h-10 rounded-md border border-gray-300 pl-10 pr-3 text-sm text-gray-900 bg-white focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none transition-all disabled:opacity-60 disabled:bg-gray-50 disabled:cursor-not-allowed";
-  const amountFieldClass = 
+  const amountFieldClass =
     "w-full h-10 rounded-md border border-gray-300 pl-10 pr-3 text-sm font-semibold text-gray-900 bg-white focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none transition-all disabled:opacity-60 disabled:bg-gray-50 disabled:cursor-not-allowed";
   const textareaClass =
     "w-full rounded-md border border-gray-300 pl-10 pr-3 py-2 text-sm text-gray-900 bg-white focus:border-[#7B0F2B] focus:ring-2 focus:ring-[#7B0F2B]/20 focus:outline-none transition-all resize-none disabled:opacity-60 disabled:bg-gray-50 disabled:cursor-not-allowed";
@@ -104,13 +104,6 @@ export default function FormSection({
         { key: "date", id: "date", label: "Date" },
         { key: "amount", id: "amount", label: "Amount" },
         { key: "purpose", id: "purpose", label: "Purpose" },
-        { key: "note", id: "note", label: "Note" },
-        { key: "projectDetails", id: "projectDetails", label: "Project Details" },
-        { key: "owner", id: "owner", label: "Owner / Client" },
-        { key: "checkDate", id: "checkDate", label: "Check Date" },
-        { key: "checkNo", id: "checkNo", label: "Check No" },
-        { key: "accountName", id: "accountName", label: "Account Name" },
-        { key: "accountNumber", id: "accountNumber", label: "Account Number" },
         { key: "receivedFromDate", id: "receivedFromDate", label: "Received Date" },
         { key: "approvedByDate", id: "approvedByDate", label: "Approved Date" },
       ] as const,
@@ -142,7 +135,7 @@ export default function FormSection({
     }
 
     setErrors(newErrors);
-    
+
     // Mark everything touched when trying to save
     const allTouched: Record<string, boolean> = {};
     for (const field of requiredFields) allTouched[field.key] = true;
@@ -223,553 +216,534 @@ export default function FormSection({
             {formError}
           </div>
         )}
-        
+
         <div className="flex flex-col gap-6 w-full">
-            
-            {/* BASIC DETAILS */}
-            <SectionCard title="Basic Details" icon={<FileText className="w-4 h-4" />}>
-              <div className="flex flex-col gap-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Paid To */}
-                  <div className="relative">
-                    <label className={labelClass}>Paid To <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                        <User className="h-4 w-4" />
-                      </div>
-                      <input
-                        type="text"
-                        value={formData.paidTo ?? ""}
-                        onChange={(e) => { if (errors.paidTo && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.paidTo; return nv; });
-                          onInputChange("paidTo", e.target.value);
-                          setShowSuggestions(true);
-                        }}
-                        onFocus={() => setShowSuggestions(true)}
-                        onBlur={() => { setTouched(prev => ({ ...prev, paidTo: true })); if (!formData.paidTo) setErrors(prev => ({ ...prev, paidTo: "This field is required." })); setTimeout(() => setShowSuggestions(false), 200); }}
-                        id="paidTo"
-                        autoComplete="off"
-                        className={`${fieldClass} ${touched.paidTo && errors.paidTo ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                        placeholder="Enter payee name"
-                      />
-                    </div>
-                    {touched.paidTo && errors.paidTo && (
-                      <FormTooltipError message={errors.paidTo} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.paidTo; return nv; })} />
-                    )}
-                    {showSuggestions && recentVouchers.filter((v) => v.paidTo?.toLowerCase().includes((formData.paidTo || "").toLowerCase())).length > 0 && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
-                        {recentVouchers
-                          .filter((v) => v.paidTo?.toLowerCase().includes((formData.paidTo || "").toLowerCase()))
-                          .map((s, i) => (
-                            <div
-                              key={i}
-                              className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm flex flex-col"
-                              onClick={() => {
-                                onInputChange("paidTo", s.paidTo || "");
-                                if (s.projectDetails) onInputChange("projectDetails", s.projectDetails);
-                                if (s.owner) onInputChange("owner", s.owner);
-                                if (s.purpose) onInputChange("purpose", s.purpose);
-                                if (s.amount) onInputChange("amount", s.amount);
-                                if (s.note) onInputChange("note", s.note);
-                                if (s.accountName) onInputChange("accountName", s.accountName);
-                                if (s.accountNumber) onInputChange("accountNumber", s.accountNumber);
-                                setShowSuggestions(false);
-                                setErrors(prev => {
-                                  const nv = { ...prev };
-                                  delete nv.paidTo;
-                                  if (s.projectDetails) delete nv.projectDetails;
-                                  if (s.owner) delete nv.owner;
-                                  if (s.purpose) delete nv.purpose;
-                                  if (s.amount) delete nv.amount;
-                                  if (s.note) delete nv.note;
-                                  if (s.accountName) delete nv.accountName;
-                                  if (s.accountNumber) delete nv.accountNumber;
-                                  return nv;
-                                });
-                              }}
-                            >
-                              <span className="font-semibold text-gray-900">{s.paidTo}</span>
-                              <span className="text-xs text-gray-500 line-clamp-1">
-                                {s.purpose} {s.amount ? `- ₱${s.amount}` : ""}
-                              </span>
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                  </div>
 
-                  {/* Voucher No */}
+          {/* BASIC DETAILS */}
+          <SectionCard title="Basic Details" icon={<FileText className="w-4 h-4" />}>
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Paid To */}
+                <div className="relative">
+                  <label className={labelClass}>Paid To <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      <User className="h-4 w-4" />
+                    </div>
+                    <input
+                      type="text"
+                      value={formData.paidTo ?? ""}
+                      onChange={(e) => {
+                        if (errors.paidTo && e.target.value.trim()) setErrors(prev => { const nv = { ...prev }; delete nv.paidTo; return nv; });
+                        onInputChange("paidTo", e.target.value);
+                        setShowSuggestions(true);
+                      }}
+                      onFocus={() => setShowSuggestions(true)}
+                      onBlur={() => { setTouched(prev => ({ ...prev, paidTo: true })); if (!formData.paidTo) setErrors(prev => ({ ...prev, paidTo: "This field is required." })); setTimeout(() => setShowSuggestions(false), 200); }}
+                      id="paidTo"
+                      autoComplete="off"
+                      className={`${fieldClass} ${touched.paidTo && errors.paidTo ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+                      placeholder="Enter payee name"
+                    />
+                  </div>
+                  {touched.paidTo && errors.paidTo && (
+                    <FormTooltipError message={errors.paidTo} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.paidTo; return nv; })} />
+                  )}
+                  {showSuggestions && recentVouchers.filter((v) => v.paidTo?.toLowerCase().includes((formData.paidTo || "").toLowerCase())).length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                      {recentVouchers
+                        .filter((v) => v.paidTo?.toLowerCase().includes((formData.paidTo || "").toLowerCase()))
+                        .map((s, i) => (
+                          <div
+                            key={i}
+                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm flex flex-col"
+                            onClick={() => {
+                              onInputChange("paidTo", s.paidTo || "");
+                              if (s.projectDetails) onInputChange("projectDetails", s.projectDetails);
+                              if (s.owner) onInputChange("owner", s.owner);
+                              if (s.purpose) onInputChange("purpose", s.purpose);
+                              if (s.amount) onInputChange("amount", s.amount);
+                              if (s.note) onInputChange("note", s.note);
+                              if (s.accountName) onInputChange("accountName", s.accountName);
+                              if (s.accountNumber) onInputChange("accountNumber", s.accountNumber);
+                              setShowSuggestions(false);
+                              setErrors(prev => {
+                                const nv = { ...prev };
+                                delete nv.paidTo;
+                                if (s.projectDetails) delete nv.projectDetails;
+                                if (s.owner) delete nv.owner;
+                                if (s.purpose) delete nv.purpose;
+                                if (s.amount) delete nv.amount;
+                                if (s.note) delete nv.note;
+                                if (s.accountName) delete nv.accountName;
+                                if (s.accountNumber) delete nv.accountNumber;
+                                return nv;
+                              });
+                            }}
+                          >
+                            <span className="font-semibold text-gray-900">{s.paidTo}</span>
+                            <span className="text-xs text-gray-500 line-clamp-1">
+                              {s.purpose} {s.amount ? `- ₱${s.amount}` : ""}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Voucher No */}
+                <div>
+                  <label className={labelClass}>Voucher No <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      <Receipt className="h-4 w-4" />
+                    </div>
+                    <input
+                      type="text"
+                      value={formData.voucherNo ?? ""}
+                      disabled
+                      onChange={(e) => onInputChange("voucherNo", e.target.value)}
+                      id="voucherNo"
+                      className={fieldClass}
+                    />
+                  </div>
+                </div>
+
+                {/* Date */}
+                <div className="relative">
+                  <label className={labelClass}>Date <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      <Calendar className="h-4 w-4" />
+                    </div>
+                    <input
+                      type="date"
+                      value={formData.date || ""}
+                      onChange={(e) => { onInputChange("date", e.target.value); if (errors.date && e.target.value.trim()) setErrors(prev => { const nv = { ...prev }; delete nv.date; return nv; }); }}
+                      onBlur={() => { setTouched(prev => ({ ...prev, date: true })); if (!formData.date) setErrors(prev => ({ ...prev, date: "This field is required." })); }} id="date"
+                      className={`${fieldClass} ${touched.date && errors.date ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+                    />
+                  </div>
+                  {touched.date && errors.date && (
+                    <FormTooltipError message={errors.date} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.date; return nv; })} />
+                  )}
+                </div>
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* PARTICULAR DETAILS & AMOUNT & CHEQUE DETAILS */}
+          <SectionCard title="Particular Details" icon={<Target className="w-4 h-4" />}>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+              {/* Purpose & Note (Left Column, span 2) */}
+              <div className="lg:col-span-2 flex flex-col gap-1">
+                <div>
+                  <label className={labelClass}>Purpose <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-3 text-gray-400">
+                      <Target className="h-4 w-4" />
+                    </div>
+                    <textarea
+                      value={formData.purpose ?? ""}
+                      onChange={(e) => { onInputChange("purpose", e.target.value.slice(0, 350)); if (errors.purpose && e.target.value.trim()) setErrors(prev => { const nv = { ...prev }; delete nv.purpose; return nv; }); }}
+                      onBlur={() => { setTouched(prev => ({ ...prev, purpose: true })); if (!formData.purpose) setErrors(prev => ({ ...prev, purpose: "This field is required." })); }} id="purpose"
+                      maxLength={350}
+                      className={`${textareaClass} ${touched.purpose && errors.purpose ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+                      placeholder="Transaction purpose"
+                      rows={4}
+                    />
+                  </div>
+                  {touched.purpose && errors.purpose && (
+                    <FormTooltipError message={errors.purpose} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.purpose; return nv; })} />
+                  )}
+                </div>
+
+                <div>
+                  <label className={labelClass}>Note</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-3 text-gray-400">
+                      <AlignLeft className="h-4 w-4" />
+                    </div>
+                    <textarea
+                      value={formData.note ?? ""}
+                      onChange={(e) => { onInputChange("note", e.target.value.slice(0, 150)); }}
+                      onBlur={() => { setTouched(prev => ({ ...prev, note: true })); }} id="note"
+                      maxLength={150}
+                      className={textareaClass}
+                      placeholder="Additional notes"
+                      rows={3}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Account Name & Account Number (Right Column, span 1) */}
+              <div className="lg:col-span-1 flex flex-col gap-4">
+                {/* Account Name */}
+                <div>
+                  <label className={labelClass}>Account Name</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      <FileText className="h-4 w-4" />
+                    </div>
+                    <input
+                      type="text"
+                      value={formData.accountName ?? ""}
+                      onChange={(e) => { onInputChange("accountName", e.target.value); }}
+                      onBlur={() => { setTouched(prev => ({ ...prev, accountName: true })); }} id="accountName"
+                      className={fieldClass}
+                    />
+                  </div>
+                </div>
+
+                {/* Cheque Details */}
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className={labelClass}>Voucher No <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                        <Receipt className="h-4 w-4" />
-                      </div>
-                      <input
-                        type="text"
-                        value={formData.voucherNo ?? ""}
-                        disabled
-                        onChange={(e) => onInputChange("voucherNo", e.target.value)}
-                        id="voucherNo"
-                        className={fieldClass}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Date */}
-                  <div className="relative">
-                    <label className={labelClass}>Date <span className="text-red-500">*</span></label>
+                    <label className={labelClass}>Check Date</label>
                     <div className="relative">
                       <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                         <Calendar className="h-4 w-4" />
                       </div>
                       <input
                         type="date"
-                        value={formData.date || ""}
-                        onChange={(e) => { onInputChange("date", e.target.value); if (errors.date && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.date; return nv; }); }}
-                        onBlur={() => { setTouched(prev => ({ ...prev, date: true })); if (!formData.date) setErrors(prev => ({ ...prev, date: "This field is required." })); }} id="date"
-                        className={`${fieldClass} ${touched.date && errors.date ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+                        value={formData.checkDate || ""}
+                        onChange={(e) => { onInputChange("checkDate", e.target.value); }}
+                        onBlur={() => { setTouched(prev => ({ ...prev, checkDate: true })); }} id="checkDate"
+                        className={fieldClass}
                       />
                     </div>
-                    {touched.date && errors.date && (
-                      <FormTooltipError message={errors.date} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.date; return nv; })} />
-                    )}
-                  </div>
-                </div>
-              </div>
-            </SectionCard>
-
-            {/* PARTICULAR DETAILS & AMOUNT & CHEQUE DETAILS */}
-            <SectionCard title="Particular Details" icon={<Target className="w-4 h-4" />}>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* Purpose & Note (Left Column, span 2) */}
-                <div className="lg:col-span-2 flex flex-col gap-1">
-                  <div>
-                    <label className={labelClass}>Purpose <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                      <div className="absolute left-3 top-3 text-gray-400">
-                        <Target className="h-4 w-4" />
-                      </div>
-                      <textarea
-                        value={formData.purpose ?? ""}
-                        onChange={(e) => { onInputChange("purpose", e.target.value.slice(0, 350)); if (errors.purpose && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.purpose; return nv; }); }}
-                        onBlur={() => { setTouched(prev => ({ ...prev, purpose: true })); if (!formData.purpose) setErrors(prev => ({ ...prev, purpose: "This field is required." })); }} id="purpose"
-                        maxLength={350}
-                        className={`${textareaClass} ${touched.purpose && errors.purpose ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                        placeholder="Transaction purpose"
-                        rows={4}
-                      />
-                  </div>
-                  {touched.purpose && errors.purpose && (
-                    <FormTooltipError message={errors.purpose} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.purpose; return nv; })} />
-                  )}
                   </div>
 
                   <div>
-                    <label className={labelClass}>Note <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                      <div className="absolute left-3 top-3 text-gray-400">
-                        <AlignLeft className="h-4 w-4" />
-                      </div>
-                      <textarea
-                        value={formData.note ?? ""}
-                        onChange={(e) => { onInputChange("note", e.target.value.slice(0, 150)); if (errors.note && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.note; return nv; }); }}
-                        onBlur={() => { setTouched(prev => ({ ...prev, note: true })); if (!formData.note) setErrors(prev => ({ ...prev, note: "This field is required." })); }} id="note"
-                        maxLength={150}
-                        className={`${textareaClass} ${touched.note && errors.note ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                        placeholder="Additional notes"
-                        rows={3}
-                      />
-                  </div>
-                  {touched.note && errors.note && (
-                    <FormTooltipError message={errors.note} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.note; return nv; })} />
-                  )}
-                  </div>
-                </div>
-
-                {/* Account Name & Account Number (Right Column, span 1) */}
-                <div className="lg:col-span-1 flex flex-col gap-4">
-                  {/* Account Name */}
-                  <div>
-                    <label className={labelClass}>Account Name <span className="text-red-500">*</span></label>
+                    <label className={labelClass}>Check No</label>
                     <div className="relative">
                       <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                        <FileText className="h-4 w-4" />
+                        <Hash className="h-4 w-4" />
                       </div>
                       <input
                         type="text"
-                        value={formData.accountName ?? ""}
-                        onChange={(e) => { onInputChange("accountName", e.target.value); if (errors.accountName && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.accountName; return nv; }); }}
-                        onBlur={() => { setTouched(prev => ({ ...prev, accountName: true })); if (!formData.accountName) setErrors(prev => ({ ...prev, accountName: "This field is required." })); }} id="accountName"
-                        className={`${fieldClass} ${touched.accountName && errors.accountName ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+                        inputMode="numeric"
+                        value={formData.checkNo ?? ""}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "");
+                          onInputChange("checkNo", val);
+                        }}
+                        onBlur={() => { setTouched(prev => ({ ...prev, checkNo: true })); }} id="checkNo"
+                        className={fieldClass}
                       />
                     </div>
-                    {touched.accountName && errors.accountName && (
-                      <FormTooltipError message={errors.accountName} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.accountName; return nv; })} />
+                  </div>
+                </div>
+
+                {/* Amount & Account Number */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelClass}>Amount (₱) <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                        <Banknote className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={formData.amount ?? ""}
+                        onChange={(e) => {
+                          if (errors.amount && e.target.value.trim()) setErrors(prev => { const nv = { ...prev }; delete nv.amount; return nv; });
+                          const val = e.target.value.replace(/[^0-9.]/g, "");
+                          onInputChange("amount", val);
+                        }}
+                        onBlur={() => { setTouched(prev => ({ ...prev, amount: true })); if (!formData.amount) setErrors(prev => ({ ...prev, amount: "This field is required." })); }} id="amount"
+                        className={`${amountFieldClass} ${touched.amount && errors.amount ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    {touched.amount && errors.amount && (
+                      <FormTooltipError message={errors.amount} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.amount; return nv; })} />
                     )}
                   </div>
 
-                  {/* Cheque Details */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={labelClass}>Check Date <span className="text-red-500">*</span></label>
-                      <div className="relative">
-                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                          <Calendar className="h-4 w-4" />
-                        </div>
-                        <input
-                          type="date"
-                          value={formData.checkDate || ""}
-                          onChange={(e) => { onInputChange("checkDate", e.target.value); if (errors.checkDate && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.checkDate; return nv; }); }}
-                          onBlur={() => { setTouched(prev => ({ ...prev, checkDate: true })); if (!formData.checkDate) setErrors(prev => ({ ...prev, checkDate: "This field is required." })); }} id="checkDate"
-                          className={`${fieldClass} ${touched.checkDate && errors.checkDate ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                        />
+                  <div>
+                    <label className={labelClass}>Account Number</label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                        <CreditCard className="h-4 w-4" />
                       </div>
-                      {touched.checkDate && errors.checkDate && (
-                        <FormTooltipError message={errors.checkDate} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.checkDate; return nv; })} />
-                      )}
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>Check No <span className="text-red-500">*</span></label>
-                      <div className="relative">
-                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                          <Hash className="h-4 w-4" />
-                        </div>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={formData.checkNo ?? ""}
-                          onChange={(e) => { if (errors.checkNo && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.checkNo; return nv; });
-                            const val = e.target.value.replace(/\D/g, "");
-                            onInputChange("checkNo", val);
-                          }}
-                          onBlur={() => { setTouched(prev => ({ ...prev, checkNo: true })); if (!formData.checkNo) setErrors(prev => ({ ...prev, checkNo: "This field is required." })); }} id="checkNo"
-                          className={`${fieldClass} ${touched.checkNo && errors.checkNo ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                        />
-                      </div>
-                      {touched.checkNo && errors.checkNo && (
-                        <FormTooltipError message={errors.checkNo} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.checkNo; return nv; })} />
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Amount & Account Number */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={labelClass}>Amount (₱) <span className="text-red-500">*</span></label>
-                      <div className="relative">
-                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                          <Banknote className="h-4 w-4" />
-                        </div>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={formData.amount ?? ""}
-                          onChange={(e) => { if (errors.amount && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.amount; return nv; });
-                            const val = e.target.value.replace(/[^0-9.]/g, "");
-                            onInputChange("amount", val);
-                          }}
-                          onBlur={() => { setTouched(prev => ({ ...prev, amount: true })); if (!formData.amount) setErrors(prev => ({ ...prev, amount: "This field is required." })); }} id="amount"
-                          className={`${amountFieldClass} ${touched.amount && errors.amount ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                          placeholder="0.00"
-                        />
-                      </div>
-                      {touched.amount && errors.amount && (
-                        <FormTooltipError message={errors.amount} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.amount; return nv; })} />
-                      )}
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>Account Number <span className="text-red-500">*</span></label>
-                      <div className="relative">
-                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                          <CreditCard className="h-4 w-4" />
-                        </div>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={formData.accountNumber ?? ""}
-                          onChange={(e) => { if (errors.accountNumber && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.accountNumber; return nv; });
-                            const val = e.target.value.replace(/\D/g, "");
-                            onInputChange("accountNumber", val);
-                          }}
-                          onBlur={() => { setTouched(prev => ({ ...prev, accountNumber: true })); if (!formData.accountNumber) setErrors(prev => ({ ...prev, accountNumber: "This field is required." })); }} id="accountNumber"
-                          className={`${fieldClass} ${touched.accountNumber && errors.accountNumber ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                        />
-                      </div>
-                      {touched.accountNumber && errors.accountNumber && (
-                        <FormTooltipError message={errors.accountNumber} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.accountNumber; return nv; })} />
-                      )}
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={formData.accountNumber ?? ""}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "");
+                          onInputChange("accountNumber", val);
+                        }}
+                        onBlur={() => { setTouched(prev => ({ ...prev, accountNumber: true })); }} id="accountNumber"
+                        className={fieldClass}
+                      />
                     </div>
                   </div>
                 </div>
-
               </div>
-            </SectionCard>
 
-            {/* PROJECT & CLIENT */}
-            <SectionCard title="Project & Client" icon={<Briefcase className="w-4 h-4" />}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>Project Details <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      <Briefcase className="h-4 w-4" />
-                    </div>
-                    <input
-                      type="text"
-                      value={formData.projectDetails ?? ""}
-                      onChange={(e) => { onInputChange("projectDetails", e.target.value); if (errors.projectDetails && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.projectDetails; return nv; }); }}
-                      onBlur={() => { setTouched(prev => ({ ...prev, projectDetails: true })); if (!formData.projectDetails) setErrors(prev => ({ ...prev, projectDetails: "This field is required." })); }} id="projectDetails"
-                      className={`${fieldClass} ${touched.projectDetails && errors.projectDetails ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                      placeholder="Project title or details"
-                    />
-                  </div>
-                  {touched.projectDetails && errors.projectDetails && (
-                    <FormTooltipError message={errors.projectDetails} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.projectDetails; return nv; })} />
-                  )}
-                </div>
+            </div>
+          </SectionCard>
 
+          {/* PROJECT & CLIENT */}
+          <SectionCard title="Project & Client" icon={<Briefcase className="w-4 h-4" />}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Project Details</label>
                 <div className="relative">
-                  <label className={labelClass}>Owner / Client <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      <Building2 className="h-4 w-4" />
-                    </div>
-                    <input
-                      type="text"
-                      value={formData.owner ?? ""}
-                      onChange={(e) => { if (errors.owner && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.owner; return nv; });
-                        onInputChange("owner", e.target.value);
-                        setShowOwnerSuggestions(true);
-                      }}
-                      onFocus={() => setShowOwnerSuggestions(true)}
-                      onBlur={() => { setTouched(prev => ({ ...prev, owner: true })); if (!formData.owner) setErrors(prev => ({ ...prev, owner: "This field is required." })); setTimeout(() => setShowOwnerSuggestions(false), 200); }}
-                      id="owner"
-                      autoComplete="off"
-                      className={`${fieldClass} ${touched.owner && errors.owner ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                      placeholder="Search or enter owner/client"
-                    />
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <Briefcase className="h-4 w-4" />
                   </div>
-                  {touched.owner && errors.owner && (
-                    <FormTooltipError message={errors.owner} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.owner; return nv; })} />
-                  )}
-                  {showOwnerSuggestions && owners.filter((o) => o.name?.toLowerCase().includes((formData.owner || "").toLowerCase())).length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
-                      {owners
-                        .filter((o) => o.name?.toLowerCase().includes((formData.owner || "").toLowerCase()))
-                        .map((o, i) => (
-                          <div
-                            key={i}
-                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm flex flex-col"
-                            onClick={() => {
-                              onInputChange("owner", o.name);
-                              setShowOwnerSuggestions(false);
-                              setErrors(prev => {
-                                const nv = { ...prev };
-                                delete nv.owner;
-                                return nv;
-                              });
-                            }}
-                          >
-                            <span className="font-semibold text-gray-900">{o.name}</span>
-                            <span className="text-xs text-gray-500 line-clamp-1">{o.email || o.phone || "No contact info"}</span>
-                          </div>
-                        ))}
-                    </div>
-                  )}
+                  <input
+                    type="text"
+                    value={formData.projectDetails ?? ""}
+                    onChange={(e) => { onInputChange("projectDetails", e.target.value); }}
+                    onBlur={() => { setTouched(prev => ({ ...prev, projectDetails: true })); }} id="projectDetails"
+                    className={fieldClass}
+                    placeholder="Project title or details"
+                  />
                 </div>
               </div>
-            </SectionCard>
 
-            {/* SIGNATURES */}
-            <SectionCard title="Signatures" icon={<CheckSquare className="w-4 h-4" />}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
-                  <h3 className="text-sm font-bold text-[#800020] mb-3 pb-2 border-b border-gray-200">Received By</h3>
-                  <label className={labelClass}>Printed Name</label>
-                  <div className="relative mb-4">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      <User className="h-4 w-4" />
-                    </div>
-                    <input
-                      type="text"
-                      value={formData.receivedBy || ""}
-                      onChange={(e) => onInputChange("receivedBy", e.target.value)}
-                      placeholder="MARIA KRISSA CHAREZ R. BONGON"
-                      className={fieldClass}
-                    />
+              <div className="relative">
+                <label className={labelClass}>Owner / Client</label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <Building2 className="h-4 w-4" />
                   </div>
-                  
-                  <label className={labelClass}>Signature <span className="text-red-500">*</span></label>
-                  <div className="w-full border border-gray-200 rounded-md bg-white flex flex-col items-center justify-center relative overflow-hidden h-[80px] mb-4">
-                    {formData.receivedFromSignature ? (
-                      <img
-                        src={formData.receivedFromSignature}
-                        alt="Received Signature"
-                        className="h-12 w-auto object-contain"
-                      />
-                    ) : (
-                      <span className="text-sm text-gray-400">No signature</span>
-                    )}
-
-                    <div className="absolute bottom-1 right-1 flex gap-1">
-                      <label className="cursor-pointer bg-white border border-gray-300 px-2 py-1 text-[10px] font-medium text-gray-700 rounded-md shadow-sm hover:bg-gray-50 uppercase tracking-wide">
-                        {formData.receivedFromSignature ? "Change" : "Upload"}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                onInputChange("receivedFromSignature", reader.result as string); setErrors(prev => { const nv = {...prev}; delete nv.receivedFromSignature; return nv; });
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                            e.target.value = '';
-                          }}
-                        />
-                      </label>
-                      {formData.receivedFromSignature && (
-                        <button
-                          type="button"
-                          onClick={() => setSignatureToRemove("receivedFromSignature")}
-                          className="bg-white border border-red-200 px-2 py-1 text-[10px] font-medium text-red-600 rounded-md shadow-sm hover:bg-red-50 uppercase tracking-wide"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <label className={labelClass}>Date <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      <Calendar className="h-4 w-4" />
-                    </div>
-                    <input
-                      type="date"
-                      value={formData.receivedFromDate || ""}
-                      onChange={(e) => { onInputChange("receivedFromDate", e.target.value); if (errors.receivedFromDate && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.receivedFromDate; return nv; }); }}
-                      onBlur={() => { setTouched(prev => ({ ...prev, receivedFromDate: true })); if (!formData.receivedFromDate) setErrors(prev => ({ ...prev, receivedFromDate: "This field is required." })); }} id="receivedFromDate"
-                      className={`${fieldClass} ${touched.receivedFromDate && errors.receivedFromDate ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                    />
-                  </div>
-                  {touched.receivedFromDate && errors.receivedFromDate && (
-                    <FormTooltipError message={errors.receivedFromDate} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.receivedFromDate; return nv; })} />
-                  )}
+                  <input
+                    type="text"
+                    value={formData.owner ?? ""}
+                    onChange={(e) => {
+                      onInputChange("owner", e.target.value);
+                      setShowOwnerSuggestions(true);
+                    }}
+                    onFocus={() => setShowOwnerSuggestions(true)}
+                    onBlur={() => { setTouched(prev => ({ ...prev, owner: true })); setTimeout(() => setShowOwnerSuggestions(false), 200); }}
+                    id="owner"
+                    autoComplete="off"
+                    className={fieldClass}
+                    placeholder="Search or enter owner/client"
+                  />
                 </div>
-
-                <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
-                  <h3 className="text-sm font-bold text-[#800020] mb-3 pb-2 border-b border-gray-200">Approved By</h3>
-                  <label className={labelClass}>Printed Name</label>
-                  <div className="relative mb-4">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      <User className="h-4 w-4" />
-                    </div>
-                    <input
-                      type="text"
-                      value={formData.approvedBy || ""}
-                      onChange={(e) => onInputChange("approvedBy", e.target.value)}
-                      placeholder="ANGELLE S. SARMIENTO"
-                      className={fieldClass}
-                    />
-                  </div>
-                  
-                  <label className={labelClass}>Signature <span className="text-red-500">*</span></label>
-                  <div className="w-full border border-gray-200 rounded-md bg-white flex flex-col items-center justify-center relative overflow-hidden h-[80px] mb-4">
-                    {formData.approvedBySignature ? (
-                      <img
-                        src={formData.approvedBySignature}
-                        alt="Approved Signature"
-                        className="h-12 w-auto object-contain"
-                      />
-                    ) : (
-                      <span className="text-sm text-gray-400">No signature</span>
-                    )}
-
-                    <div className="absolute bottom-1 right-1 flex gap-1">
-                      <label className="cursor-pointer bg-white border border-gray-300 px-2 py-1 text-[10px] font-medium text-gray-700 rounded-md shadow-sm hover:bg-gray-50 uppercase tracking-wide">
-                        {formData.approvedBySignature ? "Change" : "Upload"}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                onInputChange("approvedBySignature", reader.result as string); setErrors(prev => { const nv = {...prev}; delete nv.approvedBySignature; return nv; });
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                            e.target.value = '';
+                {showOwnerSuggestions && owners.filter((o) => o.name?.toLowerCase().includes((formData.owner || "").toLowerCase())).length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                    {owners
+                      .filter((o) => o.name?.toLowerCase().includes((formData.owner || "").toLowerCase()))
+                      .map((o, i) => (
+                        <div
+                          key={i}
+                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm flex flex-col"
+                          onClick={() => {
+                            onInputChange("owner", o.name);
+                            setShowOwnerSuggestions(false);
+                            setErrors(prev => {
+                              const nv = { ...prev };
+                              delete nv.owner;
+                              return nv;
+                            });
                           }}
-                        />
-                      </label>
-                      {formData.approvedBySignature && (
-                        <button
-                          type="button"
-                          onClick={() => setSignatureToRemove("approvedBySignature")}
-                          className="bg-white border border-red-200 px-2 py-1 text-[10px] font-medium text-red-600 rounded-md shadow-sm hover:bg-red-50 uppercase tracking-wide"
                         >
-                          Remove
-                        </button>
-                      )}
-                    </div>
+                          <span className="font-semibold text-gray-900">{o.name}</span>
+                          <span className="text-xs text-gray-500 line-clamp-1">{o.email || o.phone || "No contact info"}</span>
+                        </div>
+                      ))}
                   </div>
-
-                  <label className={labelClass}>Date <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      <Calendar className="h-4 w-4" />
-                    </div>
-                    <input
-                      type="date"
-                      value={formData.approvedByDate || ""}
-                      onChange={(e) => { onInputChange("approvedByDate", e.target.value); if (errors.approvedByDate && e.target.value.trim()) setErrors(prev => { const nv = {...prev}; delete nv.approvedByDate; return nv; }); }}
-                      onBlur={() => { setTouched(prev => ({ ...prev, approvedByDate: true })); if (!formData.approvedByDate) setErrors(prev => ({ ...prev, approvedByDate: "This field is required." })); }} id="approvedByDate"
-                      className={`${fieldClass} ${touched.approvedByDate && errors.approvedByDate ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                    />
-                  </div>
-                  {touched.approvedByDate && errors.approvedByDate && (
-                    <FormTooltipError message={errors.approvedByDate} onClose={() => setErrors(prev => { const nv = {...prev}; delete nv.approvedByDate; return nv; })} />
-                  )}
-                </div>
-
+                )}
               </div>
-            </SectionCard>
+            </div>
+          </SectionCard>
+
+          {/* SIGNATURES */}
+          <SectionCard title="Signatures" icon={<CheckSquare className="w-4 h-4" />}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+                <h3 className="text-sm font-bold text-[#800020] mb-3 pb-2 border-b border-gray-200">Received By</h3>
+                <label className={labelClass}>Printed Name</label>
+                <div className="relative mb-4">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <User className="h-4 w-4" />
+                  </div>
+                  <input
+                    type="text"
+                    value={formData.receivedBy || ""}
+                    onChange={(e) => onInputChange("receivedBy", e.target.value)}
+                    placeholder="MARIA KRISSA CHAREZ R. BONGON"
+                    className={fieldClass}
+                  />
+                </div>
+
+                <label className={labelClass}>Signature <span className="text-red-500">*</span></label>
+                <div className="w-full border border-gray-200 rounded-md bg-white flex flex-col items-center justify-center relative overflow-hidden h-[80px] mb-4">
+                  {formData.receivedFromSignature ? (
+                    <img
+                      src={formData.receivedFromSignature}
+                      alt="Received Signature"
+                      className="h-12 w-auto object-contain"
+                    />
+                  ) : (
+                    <span className="text-sm text-gray-400">No signature</span>
+                  )}
+
+                  <div className="absolute bottom-1 right-1 flex gap-1">
+                    <label className="cursor-pointer bg-white border border-gray-300 px-2 py-1 text-[10px] font-medium text-gray-700 rounded-md shadow-sm hover:bg-gray-50 uppercase tracking-wide">
+                      {formData.receivedFromSignature ? "Change" : "Upload"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              onInputChange("receivedFromSignature", reader.result as string); setErrors(prev => { const nv = { ...prev }; delete nv.receivedFromSignature; return nv; });
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                    {formData.receivedFromSignature && (
+                      <button
+                        type="button"
+                        onClick={() => setSignatureToRemove("receivedFromSignature")}
+                        className="bg-white border border-red-200 px-2 py-1 text-[10px] font-medium text-red-600 rounded-md shadow-sm hover:bg-red-50 uppercase tracking-wide"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <label className={labelClass}>Date <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <Calendar className="h-4 w-4" />
+                  </div>
+                  <input
+                    type="date"
+                    value={formData.receivedFromDate || ""}
+                    onChange={(e) => { onInputChange("receivedFromDate", e.target.value); if (errors.receivedFromDate && e.target.value.trim()) setErrors(prev => { const nv = { ...prev }; delete nv.receivedFromDate; return nv; }); }}
+                    onBlur={() => { setTouched(prev => ({ ...prev, receivedFromDate: true })); if (!formData.receivedFromDate) setErrors(prev => ({ ...prev, receivedFromDate: "This field is required." })); }} id="receivedFromDate"
+                    className={`${fieldClass} ${touched.receivedFromDate && errors.receivedFromDate ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+                  />
+                </div>
+                {touched.receivedFromDate && errors.receivedFromDate && (
+                  <FormTooltipError message={errors.receivedFromDate} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.receivedFromDate; return nv; })} />
+                )}
+              </div>
+
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+                <h3 className="text-sm font-bold text-[#800020] mb-3 pb-2 border-b border-gray-200">Approved By</h3>
+                <label className={labelClass}>Printed Name</label>
+                <div className="relative mb-4">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <User className="h-4 w-4" />
+                  </div>
+                  <input
+                    type="text"
+                    value={formData.approvedBy || ""}
+                    onChange={(e) => onInputChange("approvedBy", e.target.value)}
+                    placeholder="ANGELLE S. SARMIENTO"
+                    className={fieldClass}
+                  />
+                </div>
+
+                <label className={labelClass}>Signature <span className="text-red-500">*</span></label>
+                <div className="w-full border border-gray-200 rounded-md bg-white flex flex-col items-center justify-center relative overflow-hidden h-[80px] mb-4">
+                  {formData.approvedBySignature ? (
+                    <img
+                      src={formData.approvedBySignature}
+                      alt="Approved Signature"
+                      className="h-12 w-auto object-contain"
+                    />
+                  ) : (
+                    <span className="text-sm text-gray-400">No signature</span>
+                  )}
+
+                  <div className="absolute bottom-1 right-1 flex gap-1">
+                    <label className="cursor-pointer bg-white border border-gray-300 px-2 py-1 text-[10px] font-medium text-gray-700 rounded-md shadow-sm hover:bg-gray-50 uppercase tracking-wide">
+                      {formData.approvedBySignature ? "Change" : "Upload"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              onInputChange("approvedBySignature", reader.result as string); setErrors(prev => { const nv = { ...prev }; delete nv.approvedBySignature; return nv; });
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                    {formData.approvedBySignature && (
+                      <button
+                        type="button"
+                        onClick={() => setSignatureToRemove("approvedBySignature")}
+                        className="bg-white border border-red-200 px-2 py-1 text-[10px] font-medium text-red-600 rounded-md shadow-sm hover:bg-red-50 uppercase tracking-wide"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <label className={labelClass}>Date <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <Calendar className="h-4 w-4" />
+                  </div>
+                  <input
+                    type="date"
+                    value={formData.approvedByDate || ""}
+                    onChange={(e) => { onInputChange("approvedByDate", e.target.value); if (errors.approvedByDate && e.target.value.trim()) setErrors(prev => { const nv = { ...prev }; delete nv.approvedByDate; return nv; }); }}
+                    onBlur={() => { setTouched(prev => ({ ...prev, approvedByDate: true })); if (!formData.approvedByDate) setErrors(prev => ({ ...prev, approvedByDate: "This field is required." })); }} id="approvedByDate"
+                    className={`${fieldClass} ${touched.approvedByDate && errors.approvedByDate ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+                  />
+                </div>
+                {touched.approvedByDate && errors.approvedByDate && (
+                  <FormTooltipError message={errors.approvedByDate} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.approvedByDate; return nv; })} />
+                )}
+              </div>
+
+            </div>
+          </SectionCard>
 
         </div>
 
         <div className="pt-4 w-full">
           <DownloadButton formData={formData} onValidate={validateRequired} onSave={saveVoucherToDatabase} onSuccess={onSuccessClear} />
         </div>
-      
-      <ConfirmationModal
-        open={signatureToRemove !== null}
-        title="Remove Signature"
-        message="Are you sure you want to remove this signature?"
-        confirmLabel="Yes, Remove"
-        cancelLabel="Cancel"
-        icon={Ban}
-        color="#dc2626"
-        onCancel={() => setSignatureToRemove(null)}
-        onConfirm={() => {
-          if (signatureToRemove) {
-            onInputChange(signatureToRemove, "");
-          }
-          setSignatureToRemove(null);
-        }}
-        zIndex={50}
-      />
-    </form>
+
+        <ConfirmationModal
+          open={signatureToRemove !== null}
+          title="Remove Signature"
+          message="Are you sure you want to remove this signature?"
+          confirmLabel="Yes, Remove"
+          cancelLabel="Cancel"
+          icon={Ban}
+          color="#dc2626"
+          onCancel={() => setSignatureToRemove(null)}
+          onConfirm={() => {
+            if (signatureToRemove) {
+              onInputChange(signatureToRemove, "");
+            }
+            setSignatureToRemove(null);
+          }}
+          zIndex={50}
+        />
+      </form>
     </div>
   );
 }
