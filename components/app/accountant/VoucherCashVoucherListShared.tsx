@@ -21,6 +21,7 @@ import { toast } from "sonner";
 
 import CashVoucherPreviewSection from "@/components/app/super/voucher/CashVoucher/PreviewSection";
 import type { PrintableData } from "@/components/app/super/voucher/CashVoucher/types";
+import { toPng } from "html-to-image";
 
 import DataTable, { DataTableColumn } from "@/components/app/DataTable";
 import EmptyState from "@/components/app/EmptyState";
@@ -39,7 +40,7 @@ const ACCENT = "#7a0f1f";
 // =========================
 interface CashEditFormProps {
   initialData: PrintableData;
-  onSave: (data: PrintableData) => void;
+  onSave: (data: PrintableData, base64Image?: string) => void;
   onCancel: () => void;
   isSaving: boolean;
 }
@@ -48,6 +49,8 @@ function CashEditForm({ initialData, onSave, onCancel, isSaving }: CashEditFormP
   const [formData, setFormData] = useState<PrintableData>(initialData);
   const [formError, setFormError] = useState<string | null>(null);
   const hasInitialized = useRef(false);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   const [recentVouchers, setRecentVouchers] = useState<PrintableData[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -154,7 +157,24 @@ function CashEditForm({ initialData, onSave, onCancel, isSaving }: CashEditFormP
 
   const handleSubmit = () => {
     if (!validate()) return;
-    onSave(formData);
+    setIsConfirmOpen(true);
+  };
+
+  const confirmSave = async () => {
+    let base64Image: string | undefined = undefined;
+    if (previewRef.current) {
+      const target = previewRef.current.querySelector("#printable-content") as HTMLElement;
+      if (target) {
+        try {
+          base64Image = await toPng(target, { cacheBust: true, pixelRatio: 2 });
+        } catch (error) {
+          console.error("Failed to generate image:", error);
+        }
+      }
+    }
+    
+    setIsConfirmOpen(false);
+    onSave(formData, base64Image);
   };
 
   return (
@@ -466,6 +486,24 @@ function CashEditForm({ initialData, onSave, onCancel, isSaving }: CashEditFormP
           </button>
         </div>
       </div>
+
+      <ConfirmationModal
+        open={isConfirmOpen}
+        onCancel={() => setIsConfirmOpen(false)}
+        onConfirm={confirmSave}
+        title="Update Voucher"
+        message="Are you sure you want to save the changes to this voucher?"
+        confirmLabel="Yes, Update"
+        cancelLabel="Cancel"
+        isConfirming={isSaving}
+        icon={Save}
+        color="#7a0f1f"
+      />
+
+      {/* Hidden Preview for Image Generation on Edit */}
+      <div ref={previewRef} style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
+        <CashVoucherPreviewSection formData={formData} />
+      </div>
     </div>
   );
 }
@@ -491,6 +529,7 @@ interface CashVoucher {
   approved_by_date?: string;
   received_by_signature_url?: string;
   approved_by_signature_url?: string;
+  voucher_image?: string;
 }
 
 type SortField = "date" | "voucher_no" | "paid_to" | "total_amount";
@@ -532,22 +571,26 @@ const statusPill = (status: string) => {
 };
 
 // ✅ Mini-preview thumbnail (card top)
-function CashVoucherCardPreview({ data, scale = 0.55 }: { data: PrintableData; scale?: number }) {
+function CashVoucherCardPreview({ data, imageUrl, scale = 0.55 }: { data: PrintableData; imageUrl?: string; scale?: number }) {
   return (
-    <div className="relative h-full w-full overflow-hidden bg-gray-50">
+    <div className="relative h-full w-full overflow-hidden bg-gray-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-gradient-to-b from-white to-gray-50" />
-      <div className="absolute inset-0 flex items-start justify-center pt-3">
-        <div
-          className="origin-top"
-          style={{
-            transform: `scale(${scale})`,
-            width: "fit-content",
-            pointerEvents: "none",
-          }}
-        >
-          <CashVoucherPreviewSection formData={data} />
+      {imageUrl ? (
+        <img src={imageUrl} alt="Thumbnail preview" className="relative z-10 w-full h-full object-contain p-2 shadow-sm border border-gray-100 bg-white" />
+      ) : (
+        <div className="absolute inset-0 flex items-start justify-center pt-3">
+          <div
+            className="origin-top"
+            style={{
+              transform: `scale(${scale})`,
+              width: "fit-content",
+              pointerEvents: "none",
+            }}
+          >
+            <CashVoucherPreviewSection formData={data} />
+          </div>
         </div>
-      </div>
+      )}
       <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-gray-50 to-transparent" />
     </div>
   );
@@ -775,7 +818,7 @@ export default function VoucherCashVoucherListShared({ role }: { role: "superadm
   };
 
   const handleSaveVoucher = useCallback(
-    async (formData: PrintableData) => {
+    async (formData: PrintableData, base64Image?: string) => {
       if (!selectedVoucher) return;
 
       try {
@@ -801,6 +844,7 @@ export default function VoucherCashVoucherListShared({ role }: { role: "superadm
               ? null
               : formData.approvedBySignature,
           approved_by_date: formData.approvedByDate || null,
+          ...(base64Image && { voucher_image: base64Image }),
         };
 
         const res = await fetch(`/api/accountant/vouchers/${selectedVoucher.id}`, {
@@ -961,7 +1005,7 @@ export default function VoucherCashVoucherListShared({ role }: { role: "superadm
         />
 
         <div
-          className="fixed top-0 right-0 h-full max-w-screen-xl max-w-4xl bg-white shadow-2xl z-50 transform transition-all duration-300 ease-in-out"
+          className="fixed top-0 right-0 h-full w-[1200px] max-w-full bg-white shadow-2xl z-50 transform transition-all duration-300 ease-in-out"
           style={{
             animation: isClosing ? "slideOut 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards" : "slideIn 0.4s cubic-bezier(0.32, 0.72, 0, 1)",
             boxShadow: "-8px 0 24px rgba(0,0,0,0.15)",
@@ -969,56 +1013,76 @@ export default function VoucherCashVoucherListShared({ role }: { role: "superadm
         >
           <div className="h-full flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">
-                  {panelMode === "view" ? "Voucher Preview" : "Edit Voucher"}
-                </h2>
-                <p className="text-sm text-gray-500">{selectedVoucher.voucher_no}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                {panelMode === "view" &&
-                  (selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
-                    <button
-                      onClick={() => handleCancelVoucher(selectedVoucher.id)}
-                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-colors bg-red-50 border border-red-200 text-red-700 hover:bg-red-100"
-                      title="Cancel Voucher"
-                    >
-                      <Ban className="w-4 h-4" /> Cancel
-                    </button>
-                  )}
-                <button
-                  onClick={() => setPanelMode(panelMode === "view" ? "edit" : "view")}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                >
-                  {panelMode === "view" ? (
-                    <>
-                      <Edit2 className="w-4 h-4" /> Edit
-                    </>
-                  ) : (
-                    <>
-                      <Eye className="w-4 h-4" /> View
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={closePanel}
-                  className="p-2 rounded-xl hover:bg-gray-200 transition-colors"
-                  aria-label="Close"
-                >
-                  <X className="w-5 h-5 text-gray-600" />
-                </button>
-              </div>
-            </div>
+  <div>
+    <h2 className="text-lg font-semibold text-gray-900">
+      {panelMode === "view" ? "Voucher Preview" : "Edit Voucher"}
+    </h2>
+    <p className="text-sm text-gray-500">{selectedVoucher.voucher_no}</p>
+  </div>
+
+  <div className="flex items-center gap-2">
+    {panelMode === "view" &&
+      (selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
+        <button
+          onClick={() => handleCancelVoucher(selectedVoucher.id)}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-colors bg-red-50 border border-red-200 text-red-700 hover:bg-red-100"
+          title="Cancel Voucher"
+        >
+          <Ban className="w-4 h-4" /> Cancel
+        </button>
+      )}
+
+    {(selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
+      <DownloadButton
+        formData={editFormData}
+        disabled={!editFormData}
+        imageUrl={
+          selectedVoucher.voucher_image
+            ? selectedVoucher.voucher_image.startsWith("http")
+              ? selectedVoucher.voucher_image
+              : `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"}${selectedVoucher.voucher_image}`
+            : undefined
+        }
+      />
+    )}
+
+    {(selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
+      <button
+        onClick={() => setPanelMode(panelMode === "view" ? "edit" : "view")}
+        className="flex items-center gap-2  px-3 py-2 rounded-md text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+        
+      >
+        {panelMode === "view" ? (
+          <>
+            <Edit2 className="w-4 h-4" /> Edit
+          </>
+        ) : (
+          <>
+            <Eye className="w-4 h-4" /> View
+          </>
+        )}
+      </button>
+    )}
+
+    <button
+      onClick={closePanel}
+      className="p-2 rounded-xl hover:bg-gray-200 transition-colors"
+      aria-label="Close"
+    >
+      <X className="w-5 h-5 text-gray-600" />
+    </button>
+  </div>
+</div>
 
             <div className="flex-1 overflow-y-auto bg-gray-100">
               {panelMode === "view" ? (
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-4 gap-3">
+                <div className="p-2">
+                  <div className="flex items-center justify-between mb-2 gap-3">
                     <div>
-                      <h3 className="text-lg font-bold text-gray-900">Voucher View</h3>
+                      <h3 className="text-lg font-bold text-gray-900"></h3>
                     </div>
                     <div className="w-1/3">
-                      <DownloadButton formData={editFormData} disabled={!editFormData} />
+                      
                     </div>
                   </div>
 
@@ -1039,11 +1103,19 @@ export default function VoucherCashVoucherListShared({ role }: { role: "superadm
                       </div>
                     </div>
 
-                    <div className="bg-white p-4 overflow-auto max-h-[calc(100vh-210px)]">
+                    <div className="bg-white p-4 overflow-auto max-h-[calc(100vh-170px)] flex justify-center">
                       <div className="mx-auto w-fit">
-                        <div className="origin-top-left" style={{ transform: `scale(1)` }}>
-                          <CashVoucherPreviewSection formData={editFormData} />
-                        </div>
+                        {selectedVoucher.voucher_image ? (
+                          <img
+                            src={selectedVoucher.voucher_image.startsWith("http") ? selectedVoucher.voucher_image : `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"}${selectedVoucher.voucher_image}`}
+                            alt="Cash Voucher"
+                            className="w-full max-w-[1090px] aspect-[1090/725] h-auto object-contain border border-gray-200 shadow-sm rounded bg-white"
+                          />
+                        ) : (
+                          <div className="origin-top-left" style={{ transform: `scale(1)` }}>
+                            <CashVoucherPreviewSection formData={editFormData} />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
