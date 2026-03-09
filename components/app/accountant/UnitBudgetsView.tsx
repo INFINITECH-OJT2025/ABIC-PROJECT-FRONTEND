@@ -8,6 +8,9 @@ import UnitBudgetTransactionPanel from "@/components/app/accountant/UnitBudgetTr
 import SharedToolbar from "@/components/app/SharedToolbar";
 import DataTable, { DataTableColumn } from "@/components/app/DataTable";
 import DataTableLedge, { InstrumentFilesPopover, VoucherPreviewButton } from "@/components/app/DataTableLedge";
+import { useRouter } from "next/navigation";
+import InfoTooltip from "@/components/app/InfoTooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Owner {
     id: number | string;
@@ -26,6 +29,7 @@ export interface UnitBudget {
     budget_name: string;
     opening_balance: string;
     current_balance: string;
+    total_units_balance?: number;
     status: string;
     units: Unit[];
     transactions: any[];
@@ -114,20 +118,33 @@ export function BudgetSelectDropdown({
     );
 }
 
-function UnitLedgerAccordion({ ownerId, ownerType, unit }: { ownerId: number | string, ownerType: string, unit: Unit }) {
-    const [expanded, setExpanded] = useState(false);
+function UnitLedgerAccordion({ role, ownerId, ownerType, unit, expanded: initialExpanded = false }: {
+    role?: "superadmin" | "accountant",
+    ownerId: number | string,
+    ownerType: string,
+    unit: Unit,
+    expanded?: boolean
+}) {
+    const router = useRouter();
+    const [expanded, setExpanded] = useState(initialExpanded);
+
+    useEffect(() => {
+        if (initialExpanded) setExpanded(true);
+    }, [initialExpanded]);
     const [transactions, setTransactions] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [showExtraColumns, setShowExtraColumns] = useState(false);
+    const [openingBalance, setOpeningBalance] = useState<number>(0);
 
     const fetchLedger = React.useCallback(async () => {
         setLoading(true);
         try {
             const apiOwnerType = ownerType === 'CLIENT' ? 'clients' : 'company';
-            const res = await fetch(`/api/accountant/ledger/${apiOwnerType}?owner_id=${ownerId}&unit_id=${unit.id}&sort=newest`);
+            const res = await fetch(`/api/accountant/ledger/${apiOwnerType}?owner_id=${ownerId}&unit_id=${unit.id}&sort=oldest`);
             const data = await res.json();
             if (data.success) {
                 setTransactions(data.data?.transactions || []);
+                setOpeningBalance(data.data?.openingBalance || 0);
             }
         } catch (error) {
             console.error(error);
@@ -141,6 +158,10 @@ function UnitLedgerAccordion({ ownerId, ownerType, unit }: { ownerId: number | s
             fetchLedger();
         }
     }, [expanded, fetchLedger]);
+
+    const runningBalance = transactions.length > 0
+        ? (transactions[transactions.length - 1]?.outsBalance || 0)
+        : openingBalance;
 
     const columns = React.useMemo<DataTableColumn<any>[]>(() => [
         {
@@ -200,6 +221,38 @@ function UnitLedgerAccordion({ ownerId, ownerType, unit }: { ownerId: number | s
                         {trigger}
                     </InstrumentFilesPopover>
                 )
+            },
+        },
+        {
+            key: "owner",
+            label: "ACCOUNT SOURCE",
+            align: "center",
+            width: "180px",
+            minWidth: "180px",
+            maxWidth: "180px",
+            sortable: true,
+            renderCell: (row) => {
+                if (!row.otherOwnerType || !row.otherOwnerId) {
+                    return (
+                        <InfoTooltip text={row.owner}>
+                            <span className="truncate block cursor-default">{row.owner}</span>
+                        </InfoTooltip>
+                    );
+                }
+                const destType = row.otherOwnerType.toLowerCase();
+                let targetUrl = `/${role === "superadmin" ? "super/accountant" : "accountant"}/ledger/${destType}?targetOwnerId=${row.otherOwnerId}&highlightTx=${row.transactionId}`;
+                if (row.otherUnitId) targetUrl += `&targetUnitId=${row.otherUnitId}`;
+                return (
+                    <InfoTooltip text={row.owner}>
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); router.push(targetUrl); }}
+                            className="truncate block w-full font-semibold text-[#7a0f1f] underline decoration-dotted underline-offset-2 hover:text-[#5f0c18] transition-colors cursor-pointer"
+                        >
+                            {row.owner}
+                        </button>
+                    </InfoTooltip>
+                );
             },
         },
         {
@@ -290,51 +343,75 @@ function UnitLedgerAccordion({ ownerId, ownerType, unit }: { ownerId: number | s
     ], [showExtraColumns]);
 
     return (
-        <div className="bg-white border text-sm border-gray-200 rounded-lg shadow-sm overflow-hidden mb-3">
+        <div id={`unit-ledger-${unit.id}`} className="bg-white border text-sm border-gray-200 rounded-lg shadow-sm overflow-hidden mb-3 scroll-mt-24">
             <button
                 onClick={() => setExpanded(!expanded)}
-                className="w-full flex items-center justify-between px-5 py-4 bg-white hover:bg-gray-50 transition-colors text-left focus:outline-none"
+                className="w-full flex items-center justify-between px-5 py-2.5 bg-[#7a0f1f] hover:bg-[#8e1227] transition-colors text-left focus:outline-none"
             >
                 <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gray-50 border border-gray-100 flex flex-shrink-0 items-center justify-center shadow-inner">
-                        <Building2 className="w-4 h-4 text-[#7a0f1f]" />
+                    <div className="w-8 h-8 rounded-full bg-white/10 border border-white/20 flex flex-shrink-0 items-center justify-center shadow-inner">
+                        <Building2 className="w-4 h-4 text-white" />
                     </div>
-                    <span className="font-bold text-gray-900 text-base">{unit.unit_name}</span>
+                    <span className="font-bold text-white text-base">{unit.unit_name}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest mr-2 opacity-0 sm:opacity-100">{expanded ? 'Close Ledger' : 'View Ledger'}</span>
-                    <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                    <span className="text-xs font-semibold text-red-100 uppercase tracking-widest mr-2 opacity-0 sm:opacity-100">{expanded ? 'Close Ledger' : 'View Ledger'}</span>
+                    <ChevronDown className={`w-5 h-5 text-white transition-transform ${expanded ? 'rotate-180' : ''}`} />
                 </div>
             </button>
 
             {expanded && (
                 <div className="border-t border-gray-100 bg-gray-50/50 p-4">
-                    <div className="flex justify-between items-center mb-3">
-                        <h4 className="font-bold text-gray-800">Ledger Entries</h4>
-                        <button
-                            onClick={() => setShowExtraColumns(!showExtraColumns)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#7a0f1f] bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100"
-                        >
-                            {showExtraColumns ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                            {showExtraColumns ? "Hide Extra Columns" : "Show Extra Columns"}
-                        </button>
+                    <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-4 gap-4">
+                        <h4 className="font-bold text-gray-800 self-center">Ledger Entries</h4>
+
+                        <div className="flex flex-col items-end gap-3">
+                            <button
+                                onClick={() => setShowExtraColumns(!showExtraColumns)}
+                                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#7a0f1f] bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100 w-full md:w-auto"
+                            >
+                                {showExtraColumns ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                {showExtraColumns ? "Hide Extra Columns" : "Show Extra Columns"}
+                            </button>
+
+                            <div className="flex items-center gap-6 text-right">
+                                <div>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none">Opening</p>
+                                    <div className="h-5 mt-1">
+                                        {loading ? (
+                                            <Skeleton className="h-full w-20" />
+                                        ) : (
+                                            <p className="text-sm font-bold text-gray-900">
+                                                ₱{openingBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="w-px h-6 bg-gray-200"></div>
+                                <div>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none">Running</p>
+                                    <div className="h-5 mt-1">
+                                        {loading ? (
+                                            <Skeleton className="h-full w-20" />
+                                        ) : (
+                                            <p className="text-sm font-bold text-[#7a0f1f]">
+                                                ₱{runningBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    {loading ? (
-                        <div className="flex items-center justify-center p-8 text-gray-500">
-                            <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                            Loading ledger transactions for {unit.unit_name}...
-                        </div>
-                    ) : (
-                        <div className="border border-gray-200 rounded-lg bg-white overflow-hidden overflow-x-auto">
-                            <DataTableLedge
-                                columns={columns}
-                                rows={transactions}
-                                itemName="transactions"
-                                loading={loading}
-                                getRowId={(row) => `tx-${row.transactionId}`}
-                            />
-                        </div>
-                    )}
+                    <div className="border border-gray-200 rounded-lg bg-white overflow-hidden overflow-x-auto">
+                        <DataTableLedge
+                            columns={columns}
+                            rows={transactions}
+                            itemName="transactions"
+                            loading={loading}
+                            getRowId={(row) => `tx-${row.transactionId}`}
+                        />
+                    </div>
                 </div>
             )}
         </div>
@@ -346,19 +423,34 @@ export default function UnitBudgetsView({
     ownerType,
     ownerId,
     activeBudget,
-    onRefreshBudgets
+    onRefreshBudgets,
+    hideControls = false,
+    loading = false
 }: {
     role: "superadmin" | "accountant";
     ownerType: "CLIENT" | "COMPANY";
     ownerId: string | number | null;
     activeBudget: UnitBudget | null;
     onRefreshBudgets: () => void;
+    hideControls?: boolean;
+    loading?: boolean;
 }) {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [ledgerPanelBudget, setLedgerPanelBudget] = useState<UnitBudget | null>(null);
     const [transactionPanelBudget, setTransactionPanelBudget] = useState<UnitBudget | null>(null);
     const [editPanelBudget, setEditPanelBudget] = useState<UnitBudget | null>(null);
     const [actionType, setActionType] = useState<"ADD" | "DEDUCT" | null>(null);
+    const [expandedUnitId, setExpandedUnitId] = useState<number | string | null>(null);
+
+    const scrollToUnit = (unitId: number | string) => {
+        setExpandedUnitId(unitId);
+        setTimeout(() => {
+            const el = document.getElementById(`unit-ledger-${unitId}`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }, 100);
+    };
 
     return (
         <div className="w-full flex flex-col gap-4 mt-6">
@@ -366,6 +458,27 @@ export default function UnitBudgetsView({
                 <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-lg bg-white">
                     <Building2 className="w-10 h-10 text-gray-300 mb-3" />
                     <p className="text-gray-500 font-medium">Please select an owner to view their budgets.</p>
+                </div>
+            ) : loading ? (
+                <div className="flex flex-col gap-6">
+                    <div className="flex justify-end gap-2">
+                        <Skeleton className="h-8 w-24" />
+                        <Skeleton className="h-8 w-24" />
+                        <Skeleton className="h-8 w-24" />
+                    </div>
+                    <div className="space-y-4">
+                        <Skeleton className="h-4 w-40" />
+                        <div className="flex gap-2 overflow-hidden pb-2">
+                            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-7 w-20 rounded-full shrink-0" />)}
+                        </div>
+                        <div className="space-y-3">
+                            {[1, 2, 3].map(i => (
+                                <div key={i} className="border border-gray-100 rounded-lg overflow-hidden">
+                                    <Skeleton className="h-12 w-full" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             ) : !activeBudget ? (
                 <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-lg bg-white">
@@ -380,31 +493,51 @@ export default function UnitBudgetsView({
                 </div>
             ) : (
                 <div className="flex flex-col">
-                    <div className="mb-4 flex flex-row flex-wrap gap-2 justify-end">
-                        <button
-                            onClick={() => setIsCreateModalOpen(true)}
-                            className="px-3 py-2 text-xs font-semibold text-white bg-[#7a0f1f] hover:bg-[#5f0c18] rounded shadow-sm transition-colors flex items-center justify-center gap-1.5"
-                        >
-                            <Plus className="w-3.5 h-3.5" /> New Budget
-                        </button>
-                        <button
-                            onClick={() => setEditPanelBudget(activeBudget)}
-                            className="px-3 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 hover:text-[#7a0f1f] hover:border-[#7a0f1f]/40 rounded shadow-sm transition-colors flex items-center justify-center gap-1.5"
-                        >
-                            <Plus className="w-3.5 h-3.5" /> Manage Units
-                        </button>
-                        <button
-                            onClick={() => setLedgerPanelBudget(activeBudget)}
-                            className="px-3 py-2 text-xs font-semibold text-[#7a0f1f] bg-red-50 border border-red-100 hover:bg-red-100 rounded shadow-sm transition-colors flex items-center justify-center gap-1.5"
-                        >
-                            <List className="w-3.5 h-3.5" /> Budget Ledger
-                        </button>
-                    </div>
+                    {!hideControls && (
+                        <div className="mb-4 flex flex-row flex-wrap gap-2 justify-end">
+                            <button
+                                onClick={() => setIsCreateModalOpen(true)}
+                                className="px-3 py-2 text-xs font-semibold text-white bg-[#7a0f1f] hover:bg-[#5f0c18] rounded shadow-sm transition-colors flex items-center justify-center gap-1.5"
+                            >
+                                <Plus className="w-3.5 h-3.5" /> New Budget
+                            </button>
+                            <button
+                                onClick={() => setEditPanelBudget(activeBudget)}
+                                className="px-3 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 hover:text-[#7a0f1f] hover:border-[#7a0f1f]/40 rounded shadow-sm transition-colors flex items-center justify-center gap-1.5"
+                            >
+                                <Plus className="w-3.5 h-3.5" /> Manage Units
+                            </button>
+                            <button
+                                onClick={() => setLedgerPanelBudget(activeBudget)}
+                                className="px-3 py-2 text-xs font-semibold text-[#7a0f1f] bg-red-50 border border-red-100 hover:bg-red-100 rounded shadow-sm transition-colors flex items-center justify-center gap-1.5"
+                            >
+                                <List className="w-3.5 h-3.5" /> Budget Ledger
+                            </button>
+                        </div>
+                    )}
 
                     <div className="mt-2">
                         <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
                             <Link className="w-4 h-4 text-gray-400" /> Linked Unit Ledgers
                         </h4>
+
+                        {activeBudget.units && activeBudget.units.length > 1 && (
+                            <div className="sticky top-0 z-20 -mx-4 px-4 py-2 bg-[#f8fafc]/80 backdrop-blur-sm border-b border-gray-100 mb-4 overflow-x-auto no-scrollbar flex items-center gap-2">
+                                <div className="flex items-center gap-1.5 shrink-0 pr-2 border-r border-gray-200 mr-2">
+                                    <List className="w-3.5 h-3.5 text-gray-400" />
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quick Nav</span>
+                                </div>
+                                {activeBudget.units.map(u => (
+                                    <button
+                                        key={u.id}
+                                        onClick={() => scrollToUnit(u.id)}
+                                        className="shrink-0 px-3 py-1.5 rounded-full bg-white border border-gray-200 text-xs font-bold text-gray-600 hover:border-[#7a0f1f] hover:text-[#7a0f1f] transition-all shadow-sm active:scale-95"
+                                    >
+                                        {u.unit_name}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
 
                         {!activeBudget.units || activeBudget.units.length === 0 ? (
                             <div className="py-8 text-center bg-white rounded-lg border border-[rgba(0,0,0,0.12)] shadow-sm">
@@ -413,25 +546,35 @@ export default function UnitBudgetsView({
                         ) : (
                             <div className="flex flex-col w-full">
                                 {activeBudget.units.map(unit => (
-                                    <UnitLedgerAccordion key={unit.id} ownerId={ownerId} ownerType={ownerType} unit={unit} />
+                                    <UnitLedgerAccordion
+                                        key={unit.id}
+                                        role={role}
+                                        ownerId={ownerId}
+                                        ownerType={ownerType}
+                                        unit={unit}
+                                        expanded={expandedUnitId === unit.id}
+                                    />
                                 ))}
                             </div>
                         )}
                     </div>
                 </div>
-            )}
+            )
+            }
 
-            {ownerId && (
-                <CreateUnitBudgetPanel
-                    ownerId={ownerId}
-                    open={isCreateModalOpen}
-                    onClose={() => setIsCreateModalOpen(false)}
-                    onCreated={() => {
-                        setIsCreateModalOpen(false);
-                        onRefreshBudgets();
-                    }}
-                />
-            )}
+            {
+                ownerId && (
+                    <CreateUnitBudgetPanel
+                        ownerId={ownerId}
+                        open={isCreateModalOpen}
+                        onClose={() => setIsCreateModalOpen(false)}
+                        onCreated={() => {
+                            setIsCreateModalOpen(false);
+                            onRefreshBudgets();
+                        }}
+                    />
+                )
+            }
 
             <UnitBudgetLedgerPanel
                 open={!!ledgerPanelBudget}
@@ -462,6 +605,6 @@ export default function UnitBudgetsView({
                     onRefreshBudgets();
                 }}
             />
-        </div>
+        </div >
     );
 }
