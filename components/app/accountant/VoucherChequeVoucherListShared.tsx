@@ -20,12 +20,14 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import FormTooltipError from "@/components/ui/form-tooltip-error";
 import ChequeVoucherPreviewSection from "@/components/app/super/voucher/ChequeVoucher/PreviewSection";
 import type { PrintableData } from "@/components/app/super/voucher/ChequeVoucher/types";
 import { toPng } from "html-to-image";
 
 import DataTable, { DataTableColumn } from "@/components/app/DataTable";
 import EmptyState from "@/components/app/EmptyState";
+import LoadingModal from "@/components/app/LoadingModal";
 import DownloadButton from "@/components/ui/voucher-download-button";
 import ConfirmationModal from "@/components/app/ConfirmationModal";
 import AppHeader from "@/components/app/AppHeader";
@@ -57,6 +59,10 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [owners, setOwners] = useState<any[]>([]);
   const [showOwnerSuggestions, setShowOwnerSuggestions] = useState(false);
+  const [signatureToRemove, setSignatureToRemove] = useState<"receivedFromSignature" | "approvedBySignature" | null>(null);
+  const [signatureToConfirm, setSignatureToConfirm] = useState<{ field: "receivedFromSignature" | "approvedBySignature", data: string } | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const fetchRecent = async () => {
@@ -116,36 +122,39 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
 
   const handleChange = (field: keyof PrintableData, value: string) => {
     setFormData((prev: PrintableData) => ({ ...prev, [field]: value }));
+    if (errors[field] && value.trim()) {
+      setErrors(prev => { const nv = { ...prev }; delete nv[field]; return nv; });
+    }
     if (formError) setFormError(null);
   };
 
   const validate = (): boolean => {
+    let isValid = true;
+    const newErrors: Record<string, string> = {};
     const requiredFields: { key: keyof PrintableData; label: string }[] = [
       { key: "paidTo", label: "Paid To" },
       { key: "voucherNo", label: "Voucher No" },
       { key: "date", label: "Date" },
       { key: "amount", label: "Amount" },
-      { key: "purpose", label: "Purpose" },
-      { key: "note", label: "Note" },
-      { key: "projectDetails", label: "Project Details" },
-      { key: "owner", label: "Owner / Client" },
-      { key: "checkDate", label: "Check Date" },
-      { key: "checkNo", label: "Check No" },
-      { key: "accountName", label: "Account Name" },
-      { key: "accountNumber", label: "Account Number" },
-      { key: "receivedBy", label: "Received By Printed Name" },
-      { key: "receivedFromDate", label: "Received Date" },
-      { key: "approvedBy", label: "Approved By Printed Name" },
-      { key: "approvedByDate", label: "Approved Date" }
+      { key: "purpose", label: "Purpose" }
     ];
 
     for (const field of requiredFields) {
       const value = formData[field.key];
       if (typeof value !== "string" || value.trim() === "") {
-        setFormError(`${field.label} is required.`);
-        return false;
+        newErrors[field.key] = `${field.label} is required.`;
+        isValid = false;
       }
     }
+
+    setErrors(newErrors);
+
+    // Mark all as touched
+    const allTouched: Record<string, boolean> = {};
+    for (const field of requiredFields) allTouched[field.key] = true;
+    allTouched["receivedFromSignature"] = true;
+    allTouched["approvedBySignature"] = true;
+    setTouched(allTouched);
 
     const hasReceivedSig = formData.receivedFromSignature && formData.receivedFromSignature !== "/images/voucher/signature/ReceivedSignature.png";
     if (!hasReceivedSig) {
@@ -156,8 +165,10 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
     const hasApprovedSig = formData.approvedBySignature && formData.approvedBySignature !== "/images/voucher/signature/ApprovedSignature.png";
     if (!hasApprovedSig) {
       setFormError("Approved By Signature is required.");
-      return false;
+      isValid = false;
     }
+
+    if (!isValid) return false;
 
     setFormError(null);
     return true;
@@ -166,6 +177,10 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
   const handleSubmit = () => {
     if (!validate()) return;
     setIsConfirmOpen(true);
+  };
+
+  const handleChangeSignature = (field: "receivedFromSignature" | "approvedBySignature", data: string) => {
+    setSignatureToConfirm({ field, data });
   };
 
   const confirmSave = async () => {
@@ -180,7 +195,7 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
         }
       }
     }
-    
+
     setIsConfirmOpen(false);
     onSave(formData, base64Image);
   };
@@ -216,14 +231,19 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
               type="text"
               value={formData.paidTo ?? ""}
               onChange={(e) => {
-                handleChange("paidTo", e.target.value);
+                const val = e.target.value.toUpperCase();
+                handleChange("paidTo", val);
                 setShowSuggestions(true);
               }}
               onFocus={() => setShowSuggestions(true)}
               onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+              id="paidTo"
               autoComplete="off"
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f]"
+              className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.paidTo && errors.paidTo ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
             />
+            {touched.paidTo && errors.paidTo && (
+              <FormTooltipError message={errors.paidTo} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.paidTo; return nv; })} />
+            )}
             {showSuggestions && recentVouchers.filter((v) => v.paidTo?.toLowerCase().includes((formData.paidTo || "").toLowerCase())).length > 0 && (
               <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
                 {recentVouchers
@@ -262,36 +282,52 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
               className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 h-10 text-sm text-gray-500 cursor-not-allowed"
             />
           </div>
-          <div>
+          <div className="relative">
             <label className="block text-xs font-medium mb-1 text-gray-600">Date</label>
             <input
               type="date"
               value={formData.date ?? ""}
               onChange={(e) => handleChange("date", e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f]"
+              id="date"
+              className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.date && errors.date ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
             />
+            {touched.date && errors.date && (
+              <FormTooltipError message={errors.date} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.date; return nv; })} />
+            )}
           </div>
-          <div>
+          <div className="relative">
             <label className="block text-xs font-medium mb-1 text-gray-600">Amount (₱)</label>
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={formData.amount ?? ""}
-              onChange={(e) => handleChange("amount", e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f]"
+              onChange={(e) => {
+                const val = e.target.value.replace(/[^0-9.]/g, "");
+                handleChange("amount", val);
+              }}
+              id="amount"
+              className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.amount && errors.amount ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
             />
+            {touched.amount && errors.amount && (
+              <FormTooltipError message={errors.amount} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.amount; return nv; })} />
+            )}
           </div>
         </div>
 
         {/* Row 2 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
+          <div className="relative">
             <label className="block text-xs font-medium mb-1 text-gray-600">Project Details</label>
             <input
               type="text"
               value={formData.projectDetails ?? ""}
               onChange={(e) => handleChange("projectDetails", e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f]"
+              id="projectDetails"
+              className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.projectDetails && errors.projectDetails ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
             />
+            {touched.projectDetails && errors.projectDetails && (
+              <FormTooltipError message={errors.projectDetails} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.projectDetails; return nv; })} />
+            )}
           </div>
           <div className="relative">
             <label className="block text-xs font-medium mb-1 text-gray-600">Owner / Client</label>
@@ -299,14 +335,19 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
               type="text"
               value={formData.owner ?? ""}
               onChange={(e) => {
-                handleChange("owner", e.target.value);
+                const val = e.target.value.toUpperCase();
+                handleChange("owner", val);
                 setShowOwnerSuggestions(true);
               }}
               onFocus={() => setShowOwnerSuggestions(true)}
               onBlur={() => setTimeout(() => setShowOwnerSuggestions(false), 200)}
+              id="owner"
               autoComplete="off"
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f]"
+              className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.owner && errors.owner ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
             />
+            {touched.owner && errors.owner && (
+              <FormTooltipError message={errors.owner} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.owner; return nv; })} />
+            )}
             {showOwnerSuggestions && owners.filter((o) => o.name?.toLowerCase().includes((formData.owner || "").toLowerCase())).length > 0 && (
               <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
                 {owners
@@ -331,15 +372,19 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
 
         {/* Row 3 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
+          <div className="relative">
             <label className="block text-xs font-medium mb-1 text-gray-600">Purpose</label>
             <textarea
               value={formData.purpose ?? ""}
               onChange={(e) => handleChange("purpose", e.target.value.slice(0, 100))}
               maxLength={100}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] resize-none"
+              id="purpose"
+              className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] resize-none ${touched.purpose && errors.purpose ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
               rows={2}
             />
+            {touched.purpose && errors.purpose && (
+              <FormTooltipError message={errors.purpose} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.purpose; return nv; })} />
+            )}
           </div>
           <div>
             <label className="block text-xs font-medium mb-1 text-gray-600">Note</label>
@@ -355,41 +400,57 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
 
         {/* Row 4 - Cheque Details */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-3 border-t border-gray-100">
-          <div>
+          <div className="relative">
             <label className="block text-xs font-medium mb-1 text-gray-600">Check Date</label>
             <input
               type="date"
               value={formData.checkDate ?? ""}
               onChange={(e) => handleChange("checkDate", e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f]"
+              id="checkDate"
+              className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.checkDate && errors.checkDate ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
             />
+            {touched.checkDate && errors.checkDate && (
+              <FormTooltipError message={errors.checkDate} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.checkDate; return nv; })} />
+            )}
           </div>
-          <div>
+          <div className="relative">
             <label className="block text-xs font-medium mb-1 text-gray-600">Check No</label>
             <input
               type="text"
               value={formData.checkNo ?? ""}
               onChange={(e) => handleChange("checkNo", e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f]"
+              id="checkNo"
+              className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.checkNo && errors.checkNo ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
             />
+            {touched.checkNo && errors.checkNo && (
+              <FormTooltipError message={errors.checkNo} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.checkNo; return nv; })} />
+            )}
           </div>
-          <div>
+          <div className="relative">
             <label className="block text-xs font-medium mb-1 text-gray-600">Account Name</label>
             <input
               type="text"
               value={formData.accountName ?? ""}
               onChange={(e) => handleChange("accountName", e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f]"
+              id="accountName"
+              className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.accountName && errors.accountName ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
             />
+            {touched.accountName && errors.accountName && (
+              <FormTooltipError message={errors.accountName} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.accountName; return nv; })} />
+            )}
           </div>
-          <div>
+          <div className="relative">
             <label className="block text-xs font-medium mb-1 text-gray-600">Account Number</label>
             <input
               type="text"
               value={formData.accountNumber ?? ""}
               onChange={(e) => handleChange("accountNumber", e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f]"
+              id="accountNumber"
+              className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.accountNumber && errors.accountNumber ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
             />
+            {touched.accountNumber && errors.accountNumber && (
+              <FormTooltipError message={errors.accountNumber} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.accountNumber; return nv; })} />
+            )}
           </div>
         </div>
 
@@ -429,7 +490,7 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
                       if (file) {
                         const reader = new FileReader();
                         reader.onloadend = () => {
-                          handleChange("receivedFromSignature", reader.result as string);
+                          handleChangeSignature("receivedFromSignature", reader.result as string);
                         };
                         reader.readAsDataURL(file);
                       }
@@ -440,7 +501,7 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
                 {formData.receivedFromSignature && formData.receivedFromSignature !== "/images/voucher/signature/ReceivedSignature.png" && (
                   <button
                     type="button"
-                    onClick={() => handleChange("receivedFromSignature", "")}
+                    onClick={() => setSignatureToRemove("receivedFromSignature")}
                     className="bg-white border border-red-200 px-2 py-1 text-[10px] font-medium text-red-600 rounded shadow-sm hover:bg-red-50 uppercase tracking-wide"
                   >
                     Remove
@@ -448,14 +509,18 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
                 )}
               </div>
             </div>
-            <div>
+            <div className="relative">
               <label className="block text-xs font-medium mb-1 text-gray-600">Date</label>
               <input
                 type="date"
                 value={formData.receivedFromDate ?? ""}
                 onChange={(e) => handleChange("receivedFromDate", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f]"
+                id="receivedFromDate"
+                className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.receivedFromDate && errors.receivedFromDate ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
               />
+              {touched.receivedFromDate && errors.receivedFromDate && (
+                <FormTooltipError message={errors.receivedFromDate} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.receivedFromDate; return nv; })} />
+              )}
             </div>
           </div>
 
@@ -493,7 +558,7 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
                       if (file) {
                         const reader = new FileReader();
                         reader.onloadend = () => {
-                          handleChange("approvedBySignature", reader.result as string);
+                          handleChangeSignature("approvedBySignature", reader.result as string);
                         };
                         reader.readAsDataURL(file);
                       }
@@ -504,7 +569,7 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
                 {formData.approvedBySignature && formData.approvedBySignature !== "/images/voucher/signature/ApprovedSignature.png" && (
                   <button
                     type="button"
-                    onClick={() => handleChange("approvedBySignature", "")}
+                    onClick={() => setSignatureToRemove("approvedBySignature")}
                     className="bg-white border border-red-200 px-2 py-1 text-[10px] font-medium text-red-600 rounded shadow-sm hover:bg-red-50 uppercase tracking-wide"
                   >
                     Remove
@@ -512,14 +577,18 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
                 )}
               </div>
             </div>
-            <div>
+            <div className="relative">
               <label className="block text-xs font-medium mb-1 text-gray-600">Date</label>
               <input
                 type="date"
                 value={formData.approvedByDate ?? ""}
                 onChange={(e) => handleChange("approvedByDate", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f]"
+                id="approvedByDate"
+                className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.approvedByDate && errors.approvedByDate ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
               />
+              {touched.approvedByDate && errors.approvedByDate && (
+                <FormTooltipError message={errors.approvedByDate} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.approvedByDate; return nv; })} />
+              )}
             </div>
           </div>
         </div>
@@ -532,7 +601,7 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
             className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#7a0f1f] rounded-xl hover:bg-[#8b1535] transition-colors disabled:opacity-60"
           >
             <Save className="w-4 h-4" />
-            {isSaving ? "Saving..." : "Update Voucher"}
+            Update Voucher
           </button>
         </div>
       </div>
@@ -545,9 +614,50 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
         message="Are you sure you want to save the changes to this voucher?"
         confirmLabel="Yes, Update"
         cancelLabel="Cancel"
-        isConfirming={isSaving}
         icon={Save}
         color="#7a0f1f"
+      />
+
+      <ConfirmationModal
+        open={signatureToRemove !== null}
+        title="Remove Signature"
+        message="Are you sure you want to remove this signature?"
+        confirmLabel="Yes, Remove"
+        cancelLabel="Cancel"
+        icon={Ban}
+        color="#dc2626"
+        onCancel={() => setSignatureToRemove(null)}
+        onConfirm={() => {
+          if (signatureToRemove) {
+            handleChange(signatureToRemove, "");
+          }
+          setSignatureToRemove(null);
+        }}
+        zIndex={50}
+      />
+
+      <ConfirmationModal
+        open={signatureToConfirm !== null}
+        title="Update Signature"
+        message="Are you sure you want to update this signature?"
+        confirmLabel="Yes, Update"
+        cancelLabel="Cancel"
+        icon={CheckSquare}
+        color="#16a34a"
+        onCancel={() => setSignatureToConfirm(null)}
+        onConfirm={() => {
+          if (signatureToConfirm) {
+            handleChange(signatureToConfirm.field, signatureToConfirm.data);
+          }
+          setSignatureToConfirm(null);
+        }}
+        zIndex={50}
+      />
+
+      <LoadingModal
+        isOpen={isSaving}
+        title="Updating Voucher..."
+        message="Please wait..."
       />
 
       {/* Hidden Preview for Image Generation on Edit */}
@@ -655,7 +765,7 @@ function ChequeVoucherCardPreview({ data, imageUrl, scale = 0.55 }: { data: Prin
 // Page
 // =========================
 export default function VoucherChequeVoucherListShared({ role }: { role: "superadmin" | "accountant" }) {
-    const navigation = role === "superadmin" ? superAdminNav : accountantNav;
+  const navigation = role === "superadmin" ? superAdminNav : accountantNav;
   const router = useRouter();
 
   const [vouchers, setVouchers] = useState<ChequeVoucher[]>([]);
@@ -1041,14 +1151,14 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
             View
           </button>
           {(v.status || "").toLowerCase() !== "cancelled" && (
-          <button
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#7B0F2B]/30 hover:bg-[#7B0F2B]/5 transition text-xs font-semibold"
-            onClick={() => openPanelEdit(v)}
-            title="Edit"
-          >
-            <Edit2 className="w-4 h-4" />
-            Edit
-          </button>
+            <button
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#7B0F2B]/30 hover:bg-[#7B0F2B]/5 transition text-xs font-semibold"
+              onClick={() => openPanelEdit(v)}
+              title="Edit"
+            >
+              <Edit2 className="w-4 h-4" />
+              Edit
+            </button>
           )}
           {(v.status || "").toLowerCase() !== "cancelled" && (
             <button
@@ -1106,9 +1216,9 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
                     </button>
                   )}
                 {(selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
-                  <DownloadButton 
-                    formData={editFormData} 
-                    disabled={!editFormData} 
+                  <DownloadButton
+                    formData={editFormData}
+                    disabled={!editFormData}
                     imageUrl={selectedVoucher.voucher_image ? (selectedVoucher.voucher_image.startsWith("http") ? selectedVoucher.voucher_image : `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"}${selectedVoucher.voucher_image}`) : undefined}
                   />
                 )}
@@ -1147,7 +1257,7 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
                       <h3 className="text-lg font-bold text-gray-900"></h3>
                     </div>
                     <div className="w-1/3">
-                      
+
                     </div>
                   </div>
 
@@ -1205,7 +1315,7 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
   const inputClass =
     "w-full rounded-xl border border-gray-200 px-4 py-2.5 h-10 text-sm outline-none focus:ring-2 focus:ring-[#7B0F2B]/20 focus:border-[#7B0F2B] transition-all";
 
-  
+
 
   return (
     <div className="min-h-full flex flex-col">
@@ -1213,12 +1323,12 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
         navigation={navigation}
         subtitle="Search, view, and edit cheque voucher transactions"
         primaryAction={
-                    <button
-              onClick={() => router.push(`/${role === "superadmin" ? "super/accountant" : "accountant"}/voucher/cheque-voucher`)}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-[#7a0f1f] rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm">
-              <Plus className="w-4 h-4" />
-              Create Cheque Voucher
-            </button>
+          <button
+            onClick={() => router.push(`/${role === "superadmin" ? "super/accountant" : "accountant"}/voucher/cheque-voucher`)}
+            className="flex items-center gap-2 px-4 py-2 bg-white text-[#7a0f1f] rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm">
+            <Plus className="w-4 h-4" />
+            Create Cheque Voucher
+          </button>
         }
       />
 
@@ -1267,41 +1377,41 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
 
           {/* ── Table ── */}
           <div className="mt-4">
-              {loading ? (
-                  <div className="space-y-3">
-                    {[...Array(8)].map((_, i) => (
-                      <div key={i} className="h-12 rounded-xl bg-gray-100 animate-pulse" />
-                    ))}
-                  </div>
-              ) : computed.length > 0 ? (
-                <>
-                  {/* ── Table View Only ── */}
-                  <DataTable
-                    columns={tableColumns}
-                    rows={paginatedRows}
-                    onRowClick={(row) => openPanelView(row)}
-                    sortKey={sortField}
-                    sortDirection={sortOrder}
-                    onSort={(key, dir) => {
-                      if (dir === null) return;
-                      setSortField(key as SortField);
-                      setSortOrder(dir);
-                    }}
-                    pagination={paginationMeta}
-                    onPageChange={(page) => setCurrentPage(page)}
-                    itemName="cheque vouchers"
-                  />
-                </>
-              ) : (
-                <EmptyState
-                  title={hasFilters ? "No vouchers found" : "No vouchers yet"}
-                  description={
-                    hasFilters
-                      ? "No cheque vouchers match your current filters. Try adjusting your search criteria."
-                      : "Cheque vouchers will appear here once created."
-                  }
+            {loading ? (
+              <div className="space-y-3">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="h-12 rounded-xl bg-gray-100 animate-pulse" />
+                ))}
+              </div>
+            ) : computed.length > 0 ? (
+              <>
+                {/* ── Table View Only ── */}
+                <DataTable
+                  columns={tableColumns}
+                  rows={paginatedRows}
+                  onRowClick={(row) => openPanelView(row)}
+                  sortKey={sortField}
+                  sortDirection={sortOrder}
+                  onSort={(key, dir) => {
+                    if (dir === null) return;
+                    setSortField(key as SortField);
+                    setSortOrder(dir);
+                  }}
+                  pagination={paginationMeta}
+                  onPageChange={(page) => setCurrentPage(page)}
+                  itemName="cheque vouchers"
                 />
-              )}
+              </>
+            ) : (
+              <EmptyState
+                title={hasFilters ? "No vouchers found" : "No vouchers yet"}
+                description={
+                  hasFilters
+                    ? "No cheque vouchers match your current filters. Try adjusting your search criteria."
+                    : "Cheque vouchers will appear here once created."
+                }
+              />
+            )}
           </div>
         </section>
       </div>
@@ -1333,7 +1443,12 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
           setVoucherToCancel(null);
         }}
         onConfirm={confirmCancelVoucher}
-        isConfirming={isCancelling}
+      />
+
+      <LoadingModal
+        isOpen={isCancelling}
+        title="Cancelling Voucher..."
+        message="Please wait while the voucher is being cancelled."
       />
     </div>
   );

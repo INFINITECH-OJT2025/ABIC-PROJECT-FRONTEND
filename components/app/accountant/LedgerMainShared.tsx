@@ -15,10 +15,17 @@ import {
     EyeOff,
     Filter,
     Search,
-    FileText
+    FileText,
+    CheckSquare,
+    X,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import EditTransactionPanel from "@/components/app/super/accountant/EditTransactionPanel";
+import { useAppToast } from "@/components/app/toast/AppToastProvider";
+
+export type OwnerType = "COMPANY" | "CLIENT" | "MAIN" | "SYSTEM";
 import AppHeader from "@/components/app/AppHeader";
 import SummaryBar, { StatPill } from "@/components/app/SummaryBar";
 import DataTable, { DataTableColumn } from "@/components/app/DataTable";
@@ -277,8 +284,16 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
             })
             .catch(err => console.error(err))
             .finally(() => setOwnersLoading(false));
-    }, []);
+    }, [initialOwnerId]);
 
+    // Add new states for action modal and edit panel
+    const [actionModalTx, setActionModalTx] = useState<{ transactionId: number; targetUrl: string; row: any } | null>(null);
+    const [showEditPanel, setShowEditPanel] = useState(false);
+    const [transactionToEdit, setTransactionToEdit] = useState<any | null>(null);
+    const [isFetchingTransaction, setIsFetchingTransaction] = useState(false);
+    const { showToast } = useAppToast();
+
+    // Data Fetching Hooks
     const fetchLedger = useCallback(() => {
         if (!selectedOwnerId) return;
         setEntriesLoading(true);
@@ -619,12 +634,79 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                                 if (row.otherUnitId) {
                                     targetUrl += `&targetUnitId=${row.otherUnitId}`;
                                 }
-                                router.push(targetUrl);
+                                setActionModalTx({ transactionId: row.transactionId, targetUrl, row });
                             }}
                         />
                     </div>
                 </section>
             </div>
+            
+            {/* Transaction Action Modal */}
+            {actionModalTx && (
+                <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-xl max-w-sm w-full outline-none transform transition-all p-6 relative">
+                        <button
+                            onClick={() => setActionModalTx(null)}
+                            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Transaction Action</h3>
+                        <p className="text-sm text-gray-600 mb-6">Choose an action for Transaction #{actionModalTx.transactionId}.</p>
+                        <div className="flex flex-col gap-3">
+                            <button
+                                onClick={async () => {
+                                    const txId = actionModalTx.transactionId;
+                                    setIsFetchingTransaction(true);
+                                    try {
+                                        const res = await fetch(`/api/accountant/transactions/${txId}`);
+                                        const data = await res.json();
+                                        if (data.success) {
+                                            setTransactionToEdit(data.data);
+                                            setShowEditPanel(true);
+                                            setActionModalTx(null);
+                                        } else {
+                                            showToast("Error", data.message || "Failed to load transaction data.", "error");
+                                        }
+                                    } catch (err: any) {
+                                        showToast("Error", err.message || "An error occurred.", "error");
+                                    } finally {
+                                        setIsFetchingTransaction(false);
+                                    }
+                                }}
+                                disabled={isFetchingTransaction}
+                                className="w-full py-2.5 px-4 bg-[#7a0f1f] hover:bg-[#8e1124] text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                            >
+                                {isFetchingTransaction ? "Loading..." : "Edit Transaction"}
+                            </button>
+                            <button
+                                onClick={() => {
+                                    router.push(actionModalTx.targetUrl);
+                                    setActionModalTx(null);
+                                }}
+                                disabled={isFetchingTransaction}
+                                className="w-full py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-lg transition-colors flex items-center justify-center"
+                            >
+                                Go to Ledger List
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Transaction Panel */}
+            <EditTransactionPanel
+                open={showEditPanel}
+                transaction={transactionToEdit}
+                onClose={() => {
+                    setShowEditPanel(false);
+                    setTransactionToEdit(null);
+                }}
+                onSaved={() => {
+                    fetchLedger(); // Refresh our ledger after edit
+                }}
+            />
+
         </div>
     );
 }

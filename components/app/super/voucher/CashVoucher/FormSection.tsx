@@ -34,6 +34,7 @@ export default function FormSection({
 }: FormSectionProps) {
   const [formError, setFormError] = useState<string | null>(null);
   const [signatureToRemove, setSignatureToRemove] = useState<"receivedFromSignature" | "approvedBySignature" | null>(null);
+  const [signatureToConfirm, setSignatureToConfirm] = useState<{ field: "receivedFromSignature" | "approvedBySignature", data: string } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
@@ -215,8 +216,9 @@ export default function FormSection({
                       type="text"
                       value={formData.paidTo ?? ""}
                       onChange={(e) => {
-                        if (errors.paidTo && e.target.value.trim()) setErrors(prev => { const nv = { ...prev }; delete nv.paidTo; return nv; });
-                        onInputChange("paidTo", e.target.value);
+                        const val = e.target.value.toUpperCase();
+                        if (errors.paidTo && val.trim()) setErrors(prev => { const nv = { ...prev }; delete nv.paidTo; return nv; });
+                        onInputChange("paidTo", val);
                         setShowSuggestions(true);
                       }}
                       onFocus={() => setShowSuggestions(true)}
@@ -240,9 +242,9 @@ export default function FormSection({
                             className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm flex flex-col"
                             onMouseDown={(e) => {
                               e.preventDefault();
-                              onInputChange("paidTo", s.paidTo || "");
+                              onInputChange("paidTo", (s.paidTo || "").toUpperCase());
                               if (s.projectDetails) onInputChange("projectDetails", s.projectDetails);
-                              if (s.owner) onInputChange("owner", s.owner);
+                              if (s.owner) onInputChange("owner", (s.owner || "").toUpperCase());
                               if (s.purpose) onInputChange("purpose", s.purpose);
                               if (s.amount) onInputChange("amount", s.amount);
                               if (s.note) onInputChange("note", s.note);
@@ -411,7 +413,8 @@ export default function FormSection({
                     type="text"
                     value={formData.owner ?? ""}
                     onChange={(e) => {
-                      onInputChange("owner", e.target.value);
+                      const val = e.target.value.toUpperCase();
+                      onInputChange("owner", val);
                       setShowOwnerSuggestions(true);
                     }}
                     onFocus={() => setShowOwnerSuggestions(true)}
@@ -432,7 +435,7 @@ export default function FormSection({
                           className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm flex flex-col"
                           onMouseDown={(e) => {
                             e.preventDefault();
-                            onInputChange("owner", o.name);
+                            onInputChange("owner", (o.name || "").toUpperCase());
                             setShowOwnerSuggestions(false);
                             setErrors(prev => {
                               const nv = { ...prev };
@@ -495,7 +498,7 @@ export default function FormSection({
                           if (file) {
                             const reader = new FileReader();
                             reader.onloadend = () => {
-                              onInputChange("receivedFromSignature", reader.result as string); setErrors(prev => { const nv = { ...prev }; delete nv.receivedFromSignature; return nv; });
+                              setSignatureToConfirm({ field: "receivedFromSignature", data: reader.result as string });
                             };
                             reader.readAsDataURL(file);
                           }
@@ -515,7 +518,7 @@ export default function FormSection({
                   </div>
                 </div>
 
-                <label className={labelClass}>Date <span className="text-red-500">*</span></label>
+                <label className={labelClass}>Date</label>
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                     <Calendar className="h-4 w-4" />
@@ -573,7 +576,7 @@ export default function FormSection({
                           if (file) {
                             const reader = new FileReader();
                             reader.onloadend = () => {
-                              onInputChange("approvedBySignature", reader.result as string); setErrors(prev => { const nv = { ...prev }; delete nv.approvedBySignature; return nv; });
+                              setSignatureToConfirm({ field: "approvedBySignature", data: reader.result as string });
                             };
                             reader.readAsDataURL(file);
                           }
@@ -593,7 +596,7 @@ export default function FormSection({
                   </div>
                 </div>
 
-                <label className={labelClass}>Date <span className="text-red-500">*</span></label>
+                <label className={labelClass}>Date</label>
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                     <Calendar className="h-4 w-4" />
@@ -634,6 +637,25 @@ export default function FormSection({
               onInputChange(signatureToRemove, "");
             }
             setSignatureToRemove(null);
+          }}
+          zIndex={50}
+        />
+
+        <ConfirmationModal
+          open={signatureToConfirm !== null}
+          title="Update Signature"
+          message="Are you sure you want to update this signature?"
+          confirmLabel="Yes, Update"
+          cancelLabel="Cancel"
+          icon={CheckSquare}
+          color="#16a34a"
+          onCancel={() => setSignatureToConfirm(null)}
+          onConfirm={() => {
+            if (signatureToConfirm) {
+              onInputChange(signatureToConfirm.field, signatureToConfirm.data);
+              setErrors(prev => { const nv = { ...prev }; delete nv[signatureToConfirm.field]; return nv; });
+            }
+            setSignatureToConfirm(null);
           }}
           zIndex={50}
         />
