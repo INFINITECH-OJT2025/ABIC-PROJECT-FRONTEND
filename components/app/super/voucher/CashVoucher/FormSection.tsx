@@ -518,7 +518,7 @@ export default function FormSection({
                   </div>
                 </div>
 
-                <label className={labelClass}>Date <span className="text-red-500">*</span></label>
+                <label className={labelClass}>Date</label>
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                     <Calendar className="h-4 w-4" />
@@ -596,7 +596,7 @@ export default function FormSection({
                   </div>
                 </div>
 
-                <label className={labelClass}>Date <span className="text-red-500">*</span></label>
+                <label className={labelClass}>Date</label>
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                     <Calendar className="h-4 w-4" />

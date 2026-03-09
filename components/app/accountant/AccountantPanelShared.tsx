@@ -642,7 +642,7 @@ export default function AccountantPanelShared({ role }: { role: "superadmin" | "
                                 </div>
                             </div>
 
-                            <div className="relative z-10 flex-1 flex flex-col gap-3 justify-center w-full">
+                            <div className="relative z-10 flex-1 flex flex-col gap-3 justify-start w-full">
                                 {(() => {
                                     const items = rankingTab === "depositors"
                                         ? (dashboardData?.owners_ranking?.depositors || [])
