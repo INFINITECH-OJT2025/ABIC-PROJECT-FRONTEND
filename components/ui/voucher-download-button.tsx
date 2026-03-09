@@ -8,7 +8,7 @@ import LoadingModal from "@/components/app/LoadingModal";
 import { toast } from "sonner";
 import { Download } from "lucide-react";
 
-const ACCENT = "#7a0f1f";
+// const ACCENT = "#7a0f1f";
 
 interface DownloadButtonProps {
   formData: PrintableData;
@@ -159,8 +159,8 @@ export default function DownloadButton({
         type="button"
         onClick={handleDownload}
         disabled={disabled}
-        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-        style={{ backgroundColor: ACCENT, color: "white" }}
+        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-100"
+        // style={{ backgroundColor: ACCENT, color: "white" }}
       >
         <Download className="w-4 h-4" />
         {onSave ? "Save & Export Voucher" : "Download Voucher"}
