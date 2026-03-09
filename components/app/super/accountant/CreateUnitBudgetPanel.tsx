@@ -18,11 +18,13 @@ const ACCENT = "#7a0f1f";
 export default function CreateUnitBudgetPanel({
     ownerId,
     open,
+    editBudget,
     onClose,
     onCreated
 }: {
     ownerId: string | number;
     open: boolean;
+    editBudget?: any;
     onClose: () => void;
     onCreated: () => void;
 }) {
@@ -101,9 +103,15 @@ export default function CreateUnitBudgetPanel({
     useEffect(() => {
         if (open) {
             setIsClosing(false);
-            setBudgetName("");
-            setOpeningBalance("");
-            setSelectedUnitIds([]);
+            setBudgetName(editBudget ? editBudget.budget_name : "");
+            setOpeningBalance(editBudget ? editBudget.opening_balance : "");
+
+            if (editBudget && editBudget.units) {
+                setSelectedUnitIds(editBudget.units.map((u: any) => typeof u === 'object' ? u.id : u));
+            } else {
+                setSelectedUnitIds([]);
+            }
+
             setError("");
 
             setUnitsSearch("");
@@ -116,7 +124,7 @@ export default function CreateUnitBudgetPanel({
             document.body.style.overflow = "";
         }
         return () => { document.body.style.overflow = ""; };
-    }, [open, ownerId, fetchUnits]);
+    }, [open, ownerId, fetchUnits, editBudget]);
 
     if (!mounted || (!open && !isClosing)) return null;
 
@@ -175,8 +183,13 @@ export default function CreateUnitBudgetPanel({
 
         setIsSubmitting(true);
         try {
-            const res = await fetch(`/api/accountant/budgets/owner/${ownerId}`, {
-                method: "POST",
+            const endpoint = editBudget
+                ? `/api/accountant/budgets/${editBudget.id}`
+                : `/api/accountant/budgets/owner/${ownerId}`;
+            const method = editBudget ? "PUT" : "POST";
+
+            const res = await fetch(endpoint, {
+                method,
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     budget_name: budgetName,
@@ -190,7 +203,7 @@ export default function CreateUnitBudgetPanel({
                 handleClose();
                 setTimeout(() => onCreated(), 350);
             } else {
-                setError(data.message || "Failed to create budget");
+                setError(data.message || `Failed to ${editBudget ? 'update' : 'create'} budget`);
             }
         } catch (err: any) {
             setError(err.message || "Network error occurred");
@@ -224,10 +237,10 @@ export default function CreateUnitBudgetPanel({
                 <div className="flex-shrink-0 flex items-center justify-between p-4 bg-gradient-to-r from-[#800020] via-[#A0153E] to-[#C9184A] text-white">
                     <div>
                         <h2 className="text-lg font-bold">
-                            Create New Budget
+                            {editBudget ? "Edit Budget" : "Create New Budget"}
                         </h2>
                         <p className="text-sm text-white/90 mt-0.5">
-                            Set up a new secondary ledger for this owner
+                            {editBudget ? "Modify the details of this ledger" : "Set up a new secondary ledger for this owner"}
                         </p>
                     </div>
                     <button
@@ -282,12 +295,19 @@ export default function CreateUnitBudgetPanel({
                                     value={openingBalance}
                                     onChange={(e) => setOpeningBalance(e.target.value)}
                                     placeholder="0.00"
-                                    className={fieldClass}
+                                    className={`${fieldClass} ${editBudget ? "bg-gray-100 cursor-not-allowed text-gray-500" : ""}`}
+                                    disabled={!!editBudget}
                                 />
                             </div>
-                            <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
-                                Defining an opening balance will automatically create the first 'OPENING' transaction in this budget's ledger.
-                            </p>
+                            {!editBudget ? (
+                                <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+                                    Defining an opening balance will automatically create the first 'OPENING' transaction in this budget's ledger.
+                                </p>
+                            ) : (
+                                <p className="text-xs text-amber-600 mt-1.5 leading-relaxed font-medium">
+                                    Opening balance cannot be changed after creation.
+                                </p>
+                            )}
                         </div>
                     </div>
 
@@ -419,10 +439,10 @@ export default function CreateUnitBudgetPanel({
                             {isSubmitting ? (
                                 <>
                                     <Loader2 className="w-4 h-4 animate-spin" />
-                                    Creating…
+                                    {editBudget ? "Saving…" : "Creating…"}
                                 </>
                             ) : (
-                                "Create Budget"
+                                editBudget ? "Save Changes" : "Create Budget"
                             )}
                         </button>
                     </div>

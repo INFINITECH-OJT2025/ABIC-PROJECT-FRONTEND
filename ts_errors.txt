@@ -1,12 +1,4 @@
-﻿components/app/accountant/AccountantPanelShared.tsx(67,22): error TS2304: Cannot find name 'RecentVoucher'.
-components/app/accountant/AccountantPanelShared.tsx(89,26): error TS2304: Cannot find name 'RecentVoucher'.
-components/app/accountant/AccountantPanelShared.tsx(1009,55): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type 'Record<StatusType, ElementType<any, keyof IntrinsicElements>>'.
-components/app/accountant/AccountantPanelShared.tsx(1031,194): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type 'Record<StatusType, string>'.
-components/app/accountant/LedgerClientShared.tsx(397,37): error TS2304: Cannot find name 'role'.
-components/app/accountant/LedgerClientShared.tsx(639,53): error TS2304: Cannot find name 'role'.
-components/app/accountant/LedgerCompanyShared.tsx(396,37): error TS2304: Cannot find name 'role'.
-components/app/accountant/LedgerCompanyShared.tsx(638,53): error TS2304: Cannot find name 'role'.
-components/app/accountant/LedgerMainShared.tsx(375,37): error TS2304: Cannot find name 'role'.
-components/app/accountant/LedgerMainShared.tsx(607,53): error TS2304: Cannot find name 'role'.
-components/app/accountant/LedgerSystemShared.tsx(165,37): error TS2304: Cannot find name 'role'.
-components/app/accountant/LedgerSystemShared.tsx(389,53): error TS2304: Cannot find name 'role'.
+﻿.next/dev/types/validator.ts(62,39): error TS2307: Cannot find module '../../../app/accountant/budgets/client/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(71,39): error TS2307: Cannot find module '../../../app/accountant/budgets/company/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(278,39): error TS2307: Cannot find module '../../../app/super/accountant/budgets/client/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(287,39): error TS2307: Cannot find module '../../../app/super/accountant/budgets/company/page.js' or its corresponding type declarations.

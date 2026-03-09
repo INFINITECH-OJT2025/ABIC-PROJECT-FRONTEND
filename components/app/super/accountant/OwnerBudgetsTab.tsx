@@ -1,8 +1,11 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { Plus, List, ArrowDownToLine, ArrowUpToLine, Wallet } from "lucide-react";
-import UnitBudgetDetailsModal from "@/components/app/accountant/UnitBudgetDetailsModal";
 import SharedToolbar from "@/components/app/SharedToolbar";
+
+import UnitBudgetLedgerPanel from "@/components/app/accountant/UnitBudgetLedgerPanel";
+import UnitBudgetTransactionPanel from "@/components/app/accountant/UnitBudgetTransactionPanel";
+import CreateUnitBudgetPanel from "@/components/app/super/accountant/CreateUnitBudgetPanel";
 
 interface Unit {
     id: number | string;
@@ -32,8 +35,11 @@ export default function OwnerBudgetsTab({
     const [loading, setLoading] = useState(true);
     const [query, setQuery] = useState("");
 
-    const [detailsModalBudget, setDetailsModalBudget] = useState<UnitBudget | null>(null);
+    // Panel states
+    const [ledgerPanelBudget, setLedgerPanelBudget] = useState<UnitBudget | null>(null);
+    const [transactionPanelBudget, setTransactionPanelBudget] = useState<UnitBudget | null>(null);
     const [actionType, setActionType] = useState<"ADD" | "DEDUCT" | null>(null);
+    const [editPanelBudget, setEditPanelBudget] = useState<UnitBudget | null>(null);
 
     const fetchBudgets = React.useCallback(() => {
         setLoading(true);
@@ -74,26 +80,23 @@ export default function OwnerBudgetsTab({
                 {loading ? (
                     <div className="grid grid-cols-1 gap-4">
                         {[1, 2, 3].map((i) => (
-                            <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-[200px] animate-pulse">
+                            <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-[160px] animate-pulse">
                                 <div className="p-4 flex-1">
                                     <div className="flex justify-between items-start mb-3">
-                                        <div className="h-5 bg-gray-200 rounded w-1/3"></div>
-                                        <div className="h-4 bg-gray-200 rounded w-16"></div>
+                                        <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                                        <div className="h-3 bg-gray-200 rounded w-16"></div>
                                     </div>
                                     <div className="mb-3 mt-4">
-                                        <div className="h-3 bg-gray-200 rounded w-24 mb-2"></div>
-                                        <div className="h-7 bg-gray-200 rounded w-40"></div>
-                                    </div>
-                                    <div className="mt-4">
-                                        <div className="h-3 bg-gray-200 rounded w-32 mb-2"></div>
-                                        <div className="h-5 bg-gray-200 rounded w-24"></div>
+                                        <div className="h-2 bg-gray-200 rounded w-24 mb-2"></div>
+                                        <div className="h-6 bg-gray-200 rounded w-40"></div>
                                     </div>
                                 </div>
                                 <div className="bg-gray-50/80 px-4 py-3 border-t border-gray-100 flex items-center justify-between gap-2">
-                                    <div className="h-8 bg-gray-200 rounded w-20"></div>
+                                    <div className="h-6 bg-gray-200 rounded w-20"></div>
                                     <div className="flex gap-2">
-                                        <div className="h-8 bg-gray-200 rounded w-16"></div>
-                                        <div className="h-8 bg-gray-200 rounded w-20"></div>
+                                        <div className="h-6 bg-gray-200 rounded w-8"></div>
+                                        <div className="h-6 bg-gray-200 rounded w-8"></div>
+                                        <div className="h-6 bg-gray-200 rounded w-8"></div>
                                     </div>
                                 </div>
                             </div>
@@ -114,75 +117,129 @@ export default function OwnerBudgetsTab({
                         </button>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 gap-4">
-                        {filteredBudgets.map((budget) => (
-                            <div key={budget.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col hover:border-[#7a0f1f]/30 transition-colors">
-                                <div className="p-4 flex-1">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <h3 className="font-bold text-gray-900 text-base">{budget.budget_name}</h3>
-                                        <span className="px-2 py-0.5 bg-green-50 text-green-700 text-[10px] font-bold rounded uppercase tracking-wider">
-                                            {budget.status}
-                                        </span>
-                                    </div>
+                    <div className="grid grid-cols-1 gap-3">
+                    {filteredBudgets.map((budget) => (
+                    <div
+                    key={budget.id}
+                    onClick={() => setEditPanelBudget(budget)}
+                    className="cursor-pointer bg-white rounded-xl border border-gray-200 hover:shadow-md transition overflow-hidden group"
+                    >
 
-                                    <div className="mb-3">
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Running Balance</p>
-                                        <p className="text-xl font-black text-[#7a0f1f]">
-                                            ₱{parseFloat(budget.current_balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-                                        </p>
-                                    </div>
+                    {/* HEADER */}
+                    <div className="bg-gradient-to-r from-[#7a0f1f] to-[#9f1d2d] px-5 py-3 flex items-center justify-between text-white">
+                        <div className="flex items-center gap-2">
+                            <Wallet className="w-4 h-4 opacity-90" />
+                            <h3 className="font-semibold text-sm tracking-wide">
+                                {budget.budget_name}
+                            </h3>
+                        </div>
 
-                                    <div className="text-xs text-gray-500">
-                                        <p className="mb-1"><span className="font-semibold text-gray-600">Opening:</span> ₱{parseFloat(budget.opening_balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
-                                        {budget.units && budget.units.length > 0 && (
-                                            <p className="inline-flex bg-gray-50 px-2 py-1.5 rounded text-[11px] font-medium text-gray-600 border border-gray-100 mt-2">
-                                                Linked to {budget.units.length} unit{budget.units.length > 1 ? 's' : ''}
-                                            </p>
-                                        )}
-                                    </div>
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold tracking-wider ${
+                            budget.status === "ACTIVE"
+                            ? "bg-green-400/20 text-green-100"
+                            : "bg-white/20 text-gray-100"
+                        }`}>
+                            {budget.status}
+                        </span>
+                    </div>
+
+                    {/* BODY */}
+                    <div className="px-5 py-2 space-y-2">
+
+                        <div className="pt-2">
+                            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">
+                                Running Balance
+                            </p>
+
+                            <p className="text-[26px] font-bold text-[#7a0f1f] tracking-tight">
+                                ₱{parseFloat(budget.current_balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                            </p>
+                        </div>
+
+                    </div>
+
+                    {/* FOOTER */}
+                    <div className="px-5 py-3 border-t bg-gray-50 flex items-center justify-between">
+
+                        {budget.units && budget.units.length > 0 ? (
+                            <div className="text-xs font-medium text-gray-600 flex items-center gap-2">
+                                <div className="w-6 h-6 rounded bg-white border flex items-center justify-center text-[#7a0f1f] font-semibold">
+                                    {budget.units.length}
                                 </div>
-
-                                <div className="bg-gray-50/80 px-4 py-2.5 border-t border-gray-100 flex items-center justify-between gap-2">
-                                    <button
-                                        onClick={() => setDetailsModalBudget(budget)}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-[13px] font-bold text-gray-700 hover:text-gray-900 transition-colors bg-white border border-gray-200 shadow-sm rounded-md"
-                                    >
-                                        <List className="w-3.5 h-3.5" />
-                                        Ledger
-                                    </button>
-
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => { setDetailsModalBudget(budget); setActionType("ADD"); }}
-                                            className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-md bg-green-50/80 border border-green-100 text-green-700 hover:bg-green-100 transition-colors text-[13px] font-bold"
-                                        >
-                                            <ArrowUpToLine className="w-3.5 h-3.5" /> Add
-                                        </button>
-                                        <button
-                                            onClick={() => { setDetailsModalBudget(budget); setActionType("DEDUCT"); }}
-                                            className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-md bg-red-50/80 border border-red-100 text-[#7a0f1f] hover:bg-red-100 transition-colors text-[13px] font-bold"
-                                        >
-                                            <ArrowDownToLine className="w-3.5 h-3.5" /> Deduct
-                                        </button>
-                                    </div>
-                                </div>
+                                Linked Unit{budget.units.length > 1 ? "s" : ""}
                             </div>
-                        ))}
+                        ) : (
+                            <div className="text-xs text-gray-500 flex items-center gap-1">
+                                <Plus className="w-3.5 h-3.5"/>
+                                Assign Units
+                            </div>
+                        )}
+
+                        <div className="flex gap-1">
+
+                            <button
+                            onClick={(e)=>{e.stopPropagation();setLedgerPanelBudget(budget);}}
+                            className="p-1.5 rounded-md border text-gray-600 hover:text-[#7a0f1f] hover:border-[#7a0f1f]/40 bg-white"
+                            title="Ledger"
+                            >
+                            <List className="w-4 h-4"/>
+                            </button>
+
+                            <button
+                            onClick={(e)=>{e.stopPropagation();setTransactionPanelBudget(budget);setActionType("ADD");}}
+                            className="p-1.5 rounded-md border text-green-700 hover:bg-green-600 hover:text-white"
+                            title="Add Funds"
+                            >
+                            <ArrowUpToLine className="w-4 h-4"/>
+                            </button>
+
+                            <button
+                            onClick={(e)=>{e.stopPropagation();setTransactionPanelBudget(budget);setActionType("DEDUCT");}}
+                            className="p-1.5 rounded-md border text-red-700 hover:bg-red-600 hover:text-white"
+                            title="Deduct Funds"
+                            >
+                            <ArrowDownToLine className="w-4 h-4"/>
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                    </div>
+                    ))}
                     </div>
                 )}
             </div>
 
-            {detailsModalBudget && (
-                <UnitBudgetDetailsModal
-                    budget={detailsModalBudget}
-                    initialAction={actionType}
-                    onClose={() => {
-                        setDetailsModalBudget(null);
-                        setActionType(null);
-                        fetchBudgets();
-                    }}
-                />
-            )}
+            <UnitBudgetLedgerPanel
+                open={!!ledgerPanelBudget}
+                budget={ledgerPanelBudget}
+                onClose={() => setLedgerPanelBudget(null)}
+            />
+
+            <UnitBudgetTransactionPanel
+                open={!!transactionPanelBudget}
+                budget={transactionPanelBudget}
+                initialAction={actionType}
+                onClose={() => {
+                    setTransactionPanelBudget(null);
+                    setActionType(null);
+                }}
+                onSuccess={() => {
+                    fetchBudgets();
+                }}
+            />
+
+            <CreateUnitBudgetPanel
+                ownerId={ownerId}
+                open={!!editPanelBudget}
+                editBudget={editPanelBudget}
+                onClose={() => setEditPanelBudget(null)}
+                onCreated={() => {
+                    setEditPanelBudget(null);
+                    fetchBudgets();
+                }}
+            />
         </div>
     );
 }

@@ -11,7 +11,8 @@ import {
     Eye,
     EyeOff,
     Search,
-    FileText
+    FileText,
+    ChevronRight
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -20,6 +21,7 @@ import DataTableLedge, { InstrumentFilesPopover, VoucherPreviewButton } from "@/
 import InfoTooltip from "@/components/app/InfoTooltip";
 import SharedToolbar from "@/components/app/SharedToolbar";
 import { DataTableColumn } from "@/components/app/DataTable";
+import UnitBudgetsView, { BudgetSelectDropdown, UnitBudget } from "@/components/app/accountant/UnitBudgetsView";
 
 // ─── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -236,6 +238,8 @@ function CompanyLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
     const [initialOwnerId] = useState(searchParams.get("targetOwnerId"));
     const [initialUnitId] = useState(searchParams.get("targetUnitId"));
 
+    const [activeTab, setActiveTab] = useState<"MAIN_LEDGER" | "UNIT_BUDGETS">("MAIN_LEDGER");
+
     // Component State
     const [owners, setOwners] = useState<Owner[]>([]);
     const [ownersLoading, setOwnersLoading] = useState(true);
@@ -247,6 +251,10 @@ function CompanyLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
     const [entries, setEntries] = useState<LedgerEntry[]>([]);
     const [openingBalance, setOpeningBalance] = useState<number>(0);
     const [entriesLoading, setEntriesLoading] = useState(false);
+
+    const [budgets, setBudgets] = useState<UnitBudget[]>([]);
+    const [selectedBudgetId, setSelectedBudgetId] = useState<number | null>(null);
+    const [budgetsLoading, setBudgetsLoading] = useState(false);
 
     const [query, setQuery] = useState("");
     const [showExtraColumns, setShowExtraColumns] = useState(false);
@@ -323,9 +331,44 @@ function CompanyLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
             .finally(() => setEntriesLoading(false));
     }, [selectedOwnerId, selectedUnitId]);
 
+    const fetchBudgets = useCallback(() => {
+        if (!selectedOwnerId) {
+            setBudgets([]);
+            setSelectedBudgetId(null);
+            return;
+        }
+        setBudgetsLoading(true);
+        fetch(`/api/accountant/budgets/owner/${selectedOwnerId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    setBudgets(data.data || []);
+                    if (data.data && data.data.length > 0) {
+                        setSelectedBudgetId(data.data[0].id);
+                    } else {
+                        setSelectedBudgetId(null);
+                    }
+                } else {
+                    setBudgets([]);
+                    setSelectedBudgetId(null);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                setSelectedBudgetId(null);
+            })
+            .finally(() => setBudgetsLoading(false));
+    }, [selectedOwnerId]);
+
     useEffect(() => {
         fetchLedger();
     }, [fetchLedger]);
+
+    useEffect(() => {
+        fetchBudgets();
+    }, [fetchBudgets]);
+
+    const activeBudget = budgets.find(b => b.id === selectedBudgetId) || null;
 
     const columns = React.useMemo<DataTableColumn<LedgerEntry>[]>(() => [
         {
@@ -563,96 +606,168 @@ function CompanyLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                     className="rounded-md bg-white p-5 shadow-sm border"
                     style={{ borderColor: BORDER }}
                 >
-                    {/* ── Section header ── */}
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <div>
-                            <h2 className="text-lg font-bold text-[#5f0c18]">Ledger Entries</h2>
-                            <p className="text-sm text-gray-600 mt-1">Review the transaction timeline and balances</p>
+                    {/* ── Top Level Context ── */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between pb-5 border-b border-gray-100 gap-4">
+                        <div className="flex flex-col space-y-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-[#5f0c18]">Company Financials</h2>
+                                <p className="text-sm text-gray-600 mt-1">Manage main ledger entries or individual unit budgets</p>
+                            </div>
                         </div>
-                        <button
-                            onClick={() => setShowExtraColumns(!showExtraColumns)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-[#7a0f1f] bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                        >
-                            {showExtraColumns ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                            {showExtraColumns ? "Hide Extra Columns" : "Show Extra Columns"}
-                        </button>
                     </div>
 
                     {/* ── Filters (SharedToolbar) ── */}
-                    <div className="mt-4">
+                    <div className="mt-5">
                         <SharedToolbar
                             searchQuery={query}
                             onSearchChange={(val: string) => setQuery(val)}
                             searchPlaceholder="Search transaction..."
-                            onRefresh={fetchLedger}
-                            containerMaxWidth="max-w-4xl"
+                            onRefresh={() => { fetchLedger(); fetchBudgets(); }}
+                            containerMaxWidth="max-w-full"
                         >
-                            {/* Company Filter - Searchable Dropdown */}
+                            {/* Segmented Control */}
+                            <div className="inline-flex p-1 bg-gray-100/80 rounded-lg w-max shrink-0 border border-gray-200/60 items-center h-10">
+                                <button
+                                    onClick={() => setActiveTab("MAIN_LEDGER")}
+                                    className={`px-3 py-1.5 text-sm font-bold rounded-md transition-all ${activeTab === "MAIN_LEDGER" ? "bg-white text-[#7a0f1f] shadow-sm" : "text-gray-500 hover:text-gray-900"}`}
+                                >
+                                    Main Ledger
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab("UNIT_BUDGETS")}
+                                    className={`px-3 py-1.5 text-sm font-bold rounded-md transition-all ${activeTab === "UNIT_BUDGETS" ? "bg-white text-[#7a0f1f] shadow-sm" : "text-gray-500 hover:text-gray-900"}`}
+                                >
+                                    Unit Budgets
+                                </button>
+                            </div>
+
+                            <div className="w-px h-8 bg-gray-200 mx-1 hidden md:block"></div>
+
                             <OwnerSelectDropdown
                                 owners={owners}
                                 selectedId={selectedOwnerId}
                                 onChange={(id) => {
                                     setSelectedOwnerId(id);
                                     setSelectedUnitId("ALL");
+                                    setSelectedBudgetId(null);
                                 }}
                                 loading={ownersLoading}
                             />
-
-                            {/* Unit Filter - Smart Dropdown */}
-                            <UnitSelectDropdown
-                                units={units}
-                                selectedId={selectedUnitId}
-                                onChange={setSelectedUnitId}
-                            />
+                            {activeTab === "MAIN_LEDGER" && (
+                                <UnitSelectDropdown
+                                    units={units}
+                                    selectedId={selectedUnitId}
+                                    onChange={(id) => {
+                                        setSelectedUnitId(id);
+                                        setActiveTab("MAIN_LEDGER");
+                                    }}
+                                />
+                            )}
+                            {activeTab === "UNIT_BUDGETS" && (
+                                <BudgetSelectDropdown
+                                    budgets={budgets}
+                                    selectedId={selectedBudgetId}
+                                    onChange={(id) => {
+                                        setSelectedBudgetId(id);
+                                        setActiveTab("UNIT_BUDGETS");
+                                    }}
+                                    disabled={budgetsLoading || budgets.length === 0}
+                                />
+                            )}
                         </SharedToolbar>
                     </div>
 
-                    {/* ── Table ── */}
                     <div className="mt-6">
                         {/* ── Top Section: Company Name, Owner Name, balances ── */}
-                        <div className="bg-white rounded-md border-x border-t p-6 mb-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between" style={{ borderColor: BORDER }}>
+                        <div className="bg-white rounded-md border-x border-t border-b p-6 mb-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between" style={{ borderColor: BORDER }}>
                             <div>
                                 <h1 className="text-xl font-bold tracking-tight text-[#5f0c18]">ABIC REALTY & CONSULTANCY CORPORATION 2025</h1>
-                                <p className="text-sm font-semibold text-gray-500 mt-1 uppercase">
-                                    {ownersLoading ? "Loading..." : (owners.find(o => String(o.id) === String(selectedOwnerId))?.name ?? "Select Company")}
-                                </p>
+                                <div className="text-sm font-bold text-gray-500 mt-1 uppercase flex items-center gap-1.5 flex-wrap">
+                                    {ownersLoading ? "Loading..." : (
+                                        <>
+                                            <span>{owners.find(o => String(o.id) === String(selectedOwnerId))?.name ?? "Select Company"}</span>
+                                            {activeTab === "MAIN_LEDGER" && selectedUnitId !== "ALL" && (
+                                                <>
+                                                    <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                                                    <span className="text-[#7a0f1f]">{units.find(u => String(u.id) === String(selectedUnitId))?.unit_name}</span>
+                                                </>
+                                            )}
+                                            {activeTab === "UNIT_BUDGETS" && (
+                                                <>
+                                                    <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                                                    <span className="text-[#7a0f1f]">{activeBudget?.budget_name || "BUDGET"}</span>
+                                                </>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
                             </div>
                             <div className="flex items-center gap-6 mt-4 md:mt-0 text-right">
                                 <div>
                                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Opening Balance</p>
                                     <p className="text-lg font-bold text-gray-900 mt-0.5">
-                                        {entriesLoading ? "..." : `₱${openingBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
+                                        {activeTab === "UNIT_BUDGETS" && activeBudget
+                                            ? `₱${parseFloat(activeBudget.opening_balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
+                                            : (entriesLoading ? "..." : `₱${openingBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`)
+                                        }
                                     </p>
                                 </div>
                                 <div className="w-px h-8 bg-gray-200"></div>
                                 <div>
                                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Running Balance</p>
                                     <p className="text-lg font-bold text-[#7a0f1f] mt-0.5">
-                                        {entriesLoading ? "..." : (entries.length > 0 ? `₱${entries[entries.length - 1].outsBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}` : "₱0.00")}
+                                        {activeTab === "UNIT_BUDGETS" && activeBudget
+                                            ? `₱${parseFloat(activeBudget.current_balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
+                                            : (entriesLoading ? "..." : (entries.length > 0 ? `₱${entries[entries.length - 1].outsBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}` : "₱0.00"))
+                                        }
                                     </p>
                                 </div>
                             </div>
                         </div>
 
-                        <DataTableLedge
-                            columns={columns}
-                            rows={paginatedEntries}
-                            pagination={paginationMeta}
-                            onPageChange={setCurrentPage}
-                            itemName="entries"
-                            loading={entriesLoading}
-                            getRowId={(row) => `row-${row.transactionId}`}
-                            highlightRowId={highlightTx ? `row-${highlightTx}` : undefined}
-                            onRowClick={(row) => {
-                                if (!row.otherOwnerType || !row.otherOwnerId) return;
-                                const destinationLedgerType = row.otherOwnerType.toLowerCase();
-                                let targetUrl = `/${role === "superadmin" ? "super/accountant" : "accountant"}/ledger/${destinationLedgerType}?targetOwnerId=${row.otherOwnerId}&highlightTx=${row.transactionId}`;
-                                if (row.otherUnitId) {
-                                    targetUrl += `&targetUnitId=${row.otherUnitId}`;
-                                }
-                                router.push(targetUrl);
-                            }}
-                        />
+                        {activeTab === "MAIN_LEDGER" ? (
+                            <>
+                                {/* ── Section header ── */}
+                                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+                                    <h3 className="text-lg font-bold text-gray-900">Ledger Entries</h3>
+                                    <button
+                                        onClick={() => setShowExtraColumns(!showExtraColumns)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-[#7a0f1f] bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                                    >
+                                        {showExtraColumns ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        {showExtraColumns ? "Hide Extra Columns" : "Show Extra Columns"}
+                                    </button>
+                                </div>
+
+                                <DataTableLedge
+                                    columns={columns}
+                                    rows={paginatedEntries}
+                                    pagination={paginationMeta}
+                                    onPageChange={setCurrentPage}
+                                    itemName="entries"
+                                    loading={entriesLoading}
+                                    getRowId={(row) => `row-${row.transactionId}`}
+                                    highlightRowId={highlightTx ? `row-${highlightTx}` : undefined}
+                                    onRowClick={(row) => {
+                                        if (!row.otherOwnerType || !row.otherOwnerId) return;
+                                        const destinationLedgerType = row.otherOwnerType.toLowerCase();
+                                        let targetUrl = `/${role === "superadmin" ? "super/accountant" : "accountant"}/ledger/${destinationLedgerType}?targetOwnerId=${row.otherOwnerId}&highlightTx=${row.transactionId}`;
+                                        if (row.otherUnitId) {
+                                            targetUrl += `&targetUnitId=${row.otherUnitId}`;
+                                        }
+                                        router.push(targetUrl);
+                                    }}
+                                />
+                            </>
+                        ) : (
+                            <UnitBudgetsView
+                                role={role}
+                                ownerType="COMPANY"
+                                ownerId={selectedOwnerId}
+                                activeBudget={activeBudget}
+                                onRefreshBudgets={fetchBudgets}
+                            />
+                        )}
                     </div>
                 </section>
             </div>
