@@ -407,7 +407,7 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
               value={formData.checkDate ?? ""}
               onChange={(e) => handleChange("checkDate", e.target.value)}
               id="checkDate"
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f]"
+              className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.checkDate && errors.checkDate ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
             />
             {touched.checkDate && errors.checkDate && (
               <FormTooltipError message={errors.checkDate} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.checkDate; return nv; })} />
@@ -420,7 +420,7 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
               value={formData.checkNo ?? ""}
               onChange={(e) => handleChange("checkNo", e.target.value)}
               id="checkNo"
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f]"
+              className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.checkNo && errors.checkNo ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
             />
             {touched.checkNo && errors.checkNo && (
               <FormTooltipError message={errors.checkNo} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.checkNo; return nv; })} />
