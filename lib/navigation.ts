@@ -76,6 +76,7 @@ export const superAdminNav: NavEntry[] = [
     { type: "divider" },
     { type: "section", label: "Accountant" },
     { type: "link", label: "ACCOUNTANT PANEL", href: "/super/accountant/accountant-panel", icon: LayoutDashboard, exact: true },
+    { type: "link", label: "ACCOUNT SUMMARY", href: "/super/accountant/account-summary", icon: BookOpen },
     {
         type: "group", label: "VOUCHERS", icon: Banknote, items: [
             { label: "Cash Voucher", href: "/super/accountant/voucher/cash-voucher", icon: Plus },
@@ -141,6 +142,7 @@ export const adminNav: NavEntry[] = [
 
 export const accountantNav: NavEntry[] = [
     { type: "link", label: "DASHBOARD", href: "/accountant/accountant-panel", icon: LayoutDashboard, exact: true },
+    { type: "link", label: "ACCOUNT SUMMARY", href: "/accountant/account-summary", icon: BookOpen },
     {
         type: "group", label: "VOUCHERS", icon: Banknote, items: [
             { label: "Cash Voucher", href: "/accountant/voucher/cash-voucher", icon: Plus },
@@ -221,6 +223,7 @@ export const viewerNav: NavEntry[] = [
     { type: "divider" },
     { type: "section", label: "Accountant" },
     { type: "link", label: "ACCOUNTANT DASHBOARD", href: "/viewer/accountant", icon: LayoutDashboard, exact: true },
+    { type: "link", label: "ACCOUNT SUMMARY", href: "/viewer/accountant/account-summary", icon: BookOpen },
     {
         type: "group", label: "TRANSACTIONS", icon: FileText, items: [
             { label: "New Transaction", href: "/viewer/accountant/transactions", icon: Plus },

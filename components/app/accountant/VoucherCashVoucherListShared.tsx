@@ -131,15 +131,8 @@ function CashEditForm({ initialData, onSave, onCancel, isSaving }: CashEditFormP
       { key: "paidTo", label: "Paid To" },
       { key: "voucherNo", label: "Voucher No" },
       { key: "date", label: "Date" },
-      { key: "projectDetails", label: "Project Details" },
-      { key: "owner", label: "Owner / Client" },
       { key: "purpose", label: "Purpose" },
-      { key: "amount", label: "Amount" },
-      { key: "note", label: "Note" },
-      { key: "receivedBy", label: "Received By Printed Name" },
-      { key: "receivedFromDate", label: "Received Date" },
-      { key: "approvedBy", label: "Approved By Printed Name" },
-      { key: "approvedByDate", label: "Approved Date" }
+      { key: "amount", label: "Amount" }
     ];
 
     for (const field of requiredFields) {

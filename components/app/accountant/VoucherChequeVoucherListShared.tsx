@@ -136,18 +136,7 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
       { key: "voucherNo", label: "Voucher No" },
       { key: "date", label: "Date" },
       { key: "amount", label: "Amount" },
-      { key: "purpose", label: "Purpose" },
-      { key: "note", label: "Note" },
-      { key: "projectDetails", label: "Project Details" },
-      { key: "owner", label: "Owner / Client" },
-      { key: "checkDate", label: "Check Date" },
-      { key: "checkNo", label: "Check No" },
-      { key: "accountName", label: "Account Name" },
-      { key: "accountNumber", label: "Account Number" },
-      { key: "receivedBy", label: "Received By Printed Name" },
-      { key: "receivedFromDate", label: "Received Date" },
-      { key: "approvedBy", label: "Approved By Printed Name" },
-      { key: "approvedByDate", label: "Approved Date" }
+      { key: "purpose", label: "Purpose" }
     ];
 
     for (const field of requiredFields) {
