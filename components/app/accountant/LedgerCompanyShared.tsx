@@ -19,6 +19,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import AppHeader from "@/components/app/AppHeader";
 import DataTableLedge, { InstrumentFilesPopover, VoucherPreviewButton } from "@/components/app/DataTableLedge";
 import InfoTooltip from "@/components/app/InfoTooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 import SharedToolbar from "@/components/app/SharedToolbar";
 import { DataTableColumn } from "@/components/app/DataTable";
 import UnitBudgetsView, { BudgetSelectDropdown, UnitBudget } from "@/components/app/accountant/UnitBudgetsView";
@@ -704,25 +705,44 @@ function CompanyLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                             </div>
                             <div className="flex items-center gap-6 mt-4 md:mt-0 text-right">
                                 <div>
-                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Opening Balance</p>
-                                    <p className="text-lg font-bold text-gray-900 mt-0.5">
-                                        {activeTab === "UNIT_BUDGETS" && activeBudget
-                                            ? `₱${parseFloat(activeBudget.opening_balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
-                                            : (entriesLoading ? "..." : `₱${openingBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`)
-                                        }
+                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                        {activeTab === "UNIT_BUDGETS" ? "Opening Budget" : "Opening Balance"}
                                     </p>
+                                    <div className="h-7 mt-0.5">
+                                        {activeTab === "UNIT_BUDGETS" && activeBudget ? (
+                                            <p className="text-lg font-bold text-gray-900">
+                                                ₱{parseFloat(activeBudget.opening_balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                                            </p>
+                                        ) : entriesLoading ? (
+                                            <Skeleton className="h-full w-24 ml-auto" />
+                                        ) : (
+                                            <p className="text-lg font-bold text-gray-900">
+                                                ₱{openingBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="w-px h-8 bg-gray-200"></div>
                                 <div>
-                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Running Balance</p>
-                                    <p className="text-lg font-bold text-[#7a0f1f] mt-0.5">
-                                        {activeTab === "UNIT_BUDGETS" && activeBudget
-                                            ? `₱${parseFloat(activeBudget.current_balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
-                                            : (entriesLoading ? "..." : (entries.length > 0 ? `₱${entries[entries.length - 1].outsBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}` : "₱0.00"))
-                                        }
+                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                        {activeTab === "UNIT_BUDGETS" ? "Total Running Balance" : "Running Balance"}
                                     </p>
+                                    <div className="h-7 mt-0.5">
+                                        {activeTab === "UNIT_BUDGETS" && activeBudget ? (
+                                            <p className="text-lg font-bold text-[#7a0f1f]">
+                                                ₱{activeBudget.total_units_balance !== undefined ? activeBudget.total_units_balance.toLocaleString("en-PH", { minimumFractionDigits: 2 }) : parseFloat(activeBudget.current_balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                                            </p>
+                                        ) : entriesLoading ? (
+                                            <Skeleton className="h-full w-24 ml-auto" />
+                                        ) : (
+                                            <p className="text-lg font-bold text-[#7a0f1f]">
+                                                {entries.length > 0 ? `₱${entries[entries.length - 1].outsBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}` : "₱0.00"}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
+
                         </div>
 
                         {activeTab === "MAIN_LEDGER" ? (
@@ -766,6 +786,8 @@ function CompanyLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                                 ownerId={selectedOwnerId}
                                 activeBudget={activeBudget}
                                 onRefreshBudgets={fetchBudgets}
+                                hideControls={true}
+                                loading={budgetsLoading}
                             />
                         )}
                     </div>
