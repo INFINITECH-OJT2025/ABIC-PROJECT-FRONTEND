@@ -4,6 +4,7 @@ import { PrintableData } from "@/components/app/super/voucher/CashVoucher/types"
 import * as htmlToImage from "html-to-image";
 import { useCallback, useState } from "react";
 import ConfirmationModal from "@/components/app/ConfirmationModal";
+import LoadingModal from "@/components/app/LoadingModal";
 import { toast } from "sonner";
 import { Download } from "lucide-react";
 
@@ -37,6 +38,7 @@ export default function DownloadButton({
 
   const confirmDownload = useCallback(async () => {
     try {
+      setIsConfirmOpen(false);
       setIsExporting(true);
 
       if (imageUrl && !onSave) {
@@ -47,17 +49,16 @@ export default function DownloadButton({
           if (!response.ok) throw new Error("Network response was not ok");
           const blob = await response.blob();
           const objectUrl = URL.createObjectURL(blob);
-          
+
           const link = document.createElement("a");
           link.download = `${formData.voucherNo || "voucher"}.png`;
           link.href = objectUrl;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          
+
           URL.revokeObjectURL(objectUrl);
-          
-          setIsConfirmOpen(false);
+
           toast.success("Image downloaded successfully.");
           if (onSuccess) onSuccess();
           return;
@@ -127,7 +128,6 @@ export default function DownloadButton({
       link.href = finalImage;
       link.click();
 
-      setIsConfirmOpen(false);
       toast.success(onSave ? "Voucher saved and exported successfully." : "Image exported successfully.");
       if (onSuccess) onSuccess();
     } catch (err) {
@@ -136,7 +136,7 @@ export default function DownloadButton({
     } finally {
       setIsExporting(false);
     }
-  }, [formData.voucherNo, onSave]);
+  }, [formData.voucherNo, onSave, imageUrl, onSuccess]);
 
   return (
     <>
@@ -148,14 +148,19 @@ export default function DownloadButton({
         message={onSave ? "Are you sure you want to save and export this voucher as an image?" : "Are you sure you want to export this voucher as an image?"}
         confirmLabel={onSave ? "Save & Export" : "Export"}
         cancelLabel="Cancel"
-        isConfirming={isExporting}
         icon={Download}
+      />
+      <LoadingModal
+        isOpen={isExporting}
+        title={onSave ? "Saving & Exporting..." : "Exporting Voucher..."}
+        message="Please wait..."
       />
       <button
         type="button"
         onClick={handleDownload}
         disabled={disabled}
-className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"      style={{backgroundColor: ACCENT, color: "white"}}
+        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+        style={{ backgroundColor: ACCENT, color: "white" }}
       >
         <Download className="w-4 h-4" />
         {onSave ? "Save & Export Voucher" : "Download Voucher"}
@@ -163,3 +168,4 @@ className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md te
     </>
   );
 }
+
