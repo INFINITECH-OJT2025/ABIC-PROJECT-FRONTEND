@@ -109,7 +109,8 @@ export default function ViewImagePanel({
             <div
                 className={`fixed inset-0 bg-black/50 transition-opacity duration-[350ms] ${isClosing ? "opacity-0" : "opacity-100"}`}
                 style={{ zIndex }}
-                onClick={handleClose}
+                onClick={(e) => { e.stopPropagation(); handleClose(); }}
+                onMouseDown={(e) => e.stopPropagation()}
                 aria-hidden="true"
             />
 

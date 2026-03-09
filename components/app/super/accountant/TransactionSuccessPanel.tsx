@@ -114,7 +114,7 @@ export default function TransactionSuccessPanel({
                     const data = await res.json().catch(() => ({}));
                     if (res.ok && data.success) {
                         setReceiptUploaded(true);
-                        console.log("Receipt successfully uploaded to Firebase");
+                        console.log("Receipt successfully uploaded to local storage");
                     } else {
                         console.error("Failed to upload receipt:", data.message);
                     }

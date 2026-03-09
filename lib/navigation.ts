@@ -98,6 +98,7 @@ export const superAdminNav: NavEntry[] = [
             { label: "System Ledger", href: "/super/accountant/ledger/system", icon: BookOpen },
         ],
     },
+
     {
         type: "group", label: "MAINTENANCE", icon: Wrench, items: [
             { label: "Banks", href: "/super/accountant/maintenance/banks", icon: Banknote },
@@ -162,6 +163,7 @@ export const accountantNav: NavEntry[] = [
             { label: "System Ledger", href: "/accountant/ledger/system", icon: BookOpen },
         ],
     },
+
     {
         type: "group", label: "MAINTENANCE", icon: Wrench, items: [
             { label: "Banks", href: "/accountant/maintenance/banks", icon: Banknote },

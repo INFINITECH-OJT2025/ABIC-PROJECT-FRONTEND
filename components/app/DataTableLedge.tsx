@@ -68,7 +68,7 @@ function TruncatedCell({ content, maxWidth }: { content: ReactNode, maxWidth: st
 
 interface InstrumentFilesPopoverProps {
     label: string
-    files: { name: string; url?: string | null; type?: string | null }[]
+    files: { name: string; url?: string | null; type?: string | null; size?: number | null }[]
     children: React.ReactNode
 }
 
@@ -95,9 +95,9 @@ function InstrumentFilesPopover({ label, files, children }: InstrumentFilesPopov
         if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null }
     }, [])
 
-    function openFile(f: { name: string; url?: string | null; type?: string | null }) {
+    function openFile(f: { name: string; url?: string | null; type?: string | null; size?: number | null }) {
         if (!f.url) return
-        setPreviewFile({ name: f.name, src: f.url, type: f.type ?? undefined })
+        setPreviewFile({ name: f.name, src: f.url, type: f.type ?? undefined, size: f.size ?? undefined })
         setPanelOpen(true)
         setVisible(false)
     }
@@ -106,7 +106,7 @@ function InstrumentFilesPopover({ label, files, children }: InstrumentFilesPopov
 
     return (
         <>
-            <div ref={triggerRef} className="relative inline-flex w-full" onMouseEnter={show} onMouseLeave={scheduleHide}>
+            <div ref={triggerRef} className="relative inline-flex w-full" onMouseEnter={show} onMouseLeave={scheduleHide} onClick={(e) => e.stopPropagation()}>
                 {children}
                 {visible && (
                     <div
@@ -114,6 +114,8 @@ function InstrumentFilesPopover({ label, files, children }: InstrumentFilesPopov
                         style={{ top: pos.top, left: pos.left }}
                         onMouseEnter={cancelHide}
                         onMouseLeave={scheduleHide}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                     >
                         <div className="bg-white rounded-xl border border-gray-200 shadow-2xl w-[200px] overflow-hidden">
                             {/* Header */}
@@ -128,6 +130,7 @@ function InstrumentFilesPopover({ label, files, children }: InstrumentFilesPopov
                                         key={i}
                                         type="button"
                                         disabled={!f.url}
+                                        onMouseDown={(e) => e.stopPropagation()}
                                         onClick={(e) => { e.stopPropagation(); openFile(f) }}
                                         className="w-full text-left px-3 py-2.5 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                     >
@@ -154,6 +157,56 @@ function InstrumentFilesPopover({ label, files, children }: InstrumentFilesPopov
 }
 
 export { InstrumentFilesPopover }
+
+// ─── Voucher Preview Button ───────────────────────────────────────────────────
+
+interface VoucherPreviewButtonProps {
+    voucherNo: string | null
+    attachmentUrl: string | null
+    fileType?: string | null
+    fileSize?: number | null
+}
+
+export function VoucherPreviewButton({ voucherNo, attachmentUrl, fileType, fileSize }: VoucherPreviewButtonProps) {
+    const [previewFile, setPreviewFile] = useState<ViewImagePanelFile | null>(null)
+    const [panelOpen, setPanelOpen] = useState(false)
+
+    if (!voucherNo) return <span className="text-gray-300">—</span>
+
+    if (!attachmentUrl) return <span>{voucherNo}</span>
+
+    return (
+        <>
+            <button
+                type="button"
+                onClick={(e) => {
+                    e.stopPropagation()
+                    setPreviewFile({
+                        name: voucherNo,
+                        src: attachmentUrl,
+                        type: fileType ?? undefined,
+                        size: fileSize ?? undefined,
+                    })
+                    setPanelOpen(true)
+                }}
+                className="inline-flex items-center gap-1.5 font-semibold text-[#7a0f1f] cursor-pointer group/voucher"
+                title="Click to view voucher"
+            >
+                <span className="underline decoration-dotted underline-offset-2">{voucherNo}</span>
+                <span className="inline-flex items-center justify-center w-4 h-4 rounded-sm bg-[#7a0f1f]/10 text-[#7a0f1f] group-hover/voucher:bg-[#7a0f1f]/20 transition-colors">
+                    <FileText className="w-2.5 h-2.5" />
+                </span>
+            </button>
+
+            <ViewImagePanel
+                open={panelOpen}
+                file={previewFile}
+                onClose={() => setPanelOpen(false)}
+                zIndex={9998}
+            />
+        </>
+    )
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -541,7 +594,14 @@ export default function DataTableLedge<T extends Record<string, any>>({
                                         style={{ background: rowBg }}
                                         onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLTableRowElement).style.background = isOdd ? "rgba(251, 207, 232, 0.35)" : "rgba(253, 242, 248, 0.9)" }}
                                         onMouseLeave={(e) => { if (!selected) (e.currentTarget as HTMLTableRowElement).style.background = rowBg }}
-                                        onClick={() => { if (clickable) onRowClick?.(row, rowIndex) }}
+                                        onClick={(e) => {
+                                            if (!clickable) return
+                                            // If the click originated from (or bubbled through) a button or anchor,
+                                            // treat it as a cell-level interactive element click — don't navigate.
+                                            const target = e.target as HTMLElement
+                                            if (target.closest('button, a, [role="button"]')) return
+                                            onRowClick?.(row, rowIndex)
+                                        }}
                                     >
                                         {visibleColumns.map((col) => {
                                             const cell = col.renderCell
