@@ -577,13 +577,26 @@ export default function DataSheetLedge<T extends Record<string, any>>({
                                 <SkeletonRow key={i} columns={visibleColumns} rowIndex={i} />
                             ))
                         ) : displayRows.length === 0 ? (
-                            <tr>
-                                <td colSpan={visibleColumns.length} className="p-0">
-                                    <EmptyState title={emptyTitle} description={emptyDescription} />
-                                </td>
-                            </tr>
+                            <>
+                                <tr>
+                                    <td colSpan={visibleColumns.length} className="p-0">
+                                        <EmptyState title={emptyTitle} description={emptyDescription} />
+                                    </td>
+                                </tr>
+                                {/* Pad with empty rows to keep table height consistent */}
+                                {[...Array(Math.max(0, 10 - 3))].map((_, i) => (
+                                    <tr key={`empty-${i}`} className="border-b border-gray-100" style={{ background: i % 2 === 0 ? "rgba(253, 242, 248, 0.6)" : "#ffffff" }}>
+                                        {visibleColumns.map((col) => (
+                                            <td key={col.key} className="px-4 py-2" style={{ width: col.width, minWidth: col.minWidth, maxWidth: col.maxWidth }}>
+                                                <span className="text-transparent select-none">&nbsp;</span>
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </>
                         ) : (
-                            displayRows.map((row, rowIndex) => {
+                            <>
+                            {displayRows.map((row, rowIndex) => {
                                 const clickable = isRowClickable?.(row) ?? !!onRowClick
                                 const selected = isRowSelected?.(row) ?? false
                                 const isOdd = rowIndex % 2 === 1
@@ -605,8 +618,6 @@ export default function DataSheetLedge<T extends Record<string, any>>({
                                         }}
                                         onClick={(e) => {
                                             if (!clickable) return
-                                            // If the click originated from (or bubbled through) a button or anchor,
-                                            // treat it as a cell-level interactive element click — don't navigate.
                                             const target = e.target as HTMLElement
                                             if (target.closest('button, a, [role="button"]')) return
                                             onRowClick?.(row, rowIndex)
@@ -625,14 +636,28 @@ export default function DataSheetLedge<T extends Record<string, any>>({
                                                     className={`px-4 py-2 text-sm text-gray-900 font-medium ${alignClass(col.align)} ${col.flex ? "w-full" : ""}`}
                                                     style={{ width: col.width, minWidth: col.minWidth, maxWidth: col.maxWidth }}
                                                 >
-                                                    {/* All cells are forced single-line with tooltip on overflow */}
                                                     <TruncatedCell content={cell} maxWidth={col.maxWidth ?? "9999px"} />
                                                 </td>
                                             )
                                         })}
                                     </tr>
                                 )
-                            })
+                            })}
+                            {/* Pad with empty rows when data rows are fewer than 10 */}
+                            {displayRows.length < 10 && [...Array(10 - displayRows.length)].map((_, i) => {
+                                const padIndex = displayRows.length + i;
+                                const isOdd = padIndex % 2 === 1;
+                                return (
+                                    <tr key={`pad-${i}`} className="border-b border-gray-100" style={{ background: isOdd ? "rgba(253, 242, 248, 0.6)" : "#ffffff" }}>
+                                        {visibleColumns.map((col) => (
+                                            <td key={col.key} className="px-4 py-2" style={{ width: col.width, minWidth: col.minWidth, maxWidth: col.maxWidth }}>
+                                                <span className="text-transparent select-none">&nbsp;</span>
+                                            </td>
+                                        ))}
+                                    </tr>
+                                );
+                            })}
+                            </>
                         )}
                     </tbody>
                 </table>
