@@ -23,6 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import SharedToolbar from "@/components/app/SharedToolbar";
 import { DataTableColumn } from "@/components/app/DataTable";
 import UnitBudgetsView, { BudgetSelectDropdown, UnitBudget } from "@/components/app/accountant/UnitBudgetsView";
+import { useAppToast } from "@/components/app/toast/AppToastProvider";
 
 // ─── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -262,6 +263,98 @@ function CompanyLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
     // Filter/Pagination states
     const [currentPage, setCurrentPage] = useState(1);
+
+    const { showToast } = useAppToast();
+
+    const handleExport = () => {
+        if (!entries || entries.length === 0) {
+            showToast("Info", "No data to export.", "info");
+            return;
+        }
+
+        import("xlsx-js-style").then((m) => {
+            const XLSX = m.default || m;
+            const currentOwnerName = owners.find(o => String(o.id) === String(selectedOwnerId))?.name ?? "Company";
+            const currentUnitName = selectedUnitId !== "ALL" ? units.find((u) => String(u.id) === String(selectedUnitId))?.unit_name : null;
+            const sanitizedName = (currentOwnerName + (currentUnitName ? `_${currentUnitName}` : "")).replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+            const runningBalanceVal = entries.length > 0 ? entries[entries.length - 1].outsBalance : 0;
+            const ws = XLSX.utils.json_to_sheet([]);
+
+            XLSX.utils.sheet_add_aoa(ws, [
+                ["ABIC REALTY & CONSULTANCY CORPORATION 2025"],
+                [(currentOwnerName.toUpperCase() + (selectedUnitId !== "ALL" ? ` - ${units.find((u) => String(u.id) === String(selectedUnitId))?.unit_name}` : ""))],
+                [], // Spacer
+            ], { origin: "A1" });
+
+            XLSX.utils.sheet_add_aoa(ws, [
+                ["OPENING BALANCE", "RUNNING BALANCE"],
+                [openingBalance || 0, runningBalanceVal]
+            ], { origin: "G1" });
+
+            const exportData = entries.map(entry => ({
+                "DATE": entry.voucherDate,
+                "VOUCHER NO.": entry.voucherNo,
+                "TRANS TYPE": entry.transType,
+                "ACCOUNT SOURCE": entry.owner,
+                "PARTICULARS": entry.particulars,
+                "DEPOSIT": entry.deposit > 0 ? entry.deposit : "",
+                "WITHDRAWAL": entry.withdrawal > 0 ? entry.withdrawal : "",
+                "OUTS. BALANCE": entry.outsBalance,
+                "FUND REFERENCES": entry.fundReference || "-",
+                "PERSON IN CHARGE": entry.personInCharge || "-"
+            }));
+
+            XLSX.utils.sheet_add_json(ws, exportData, { origin: "A5", skipHeader: false });
+
+            const headerStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "7A0F1F" } }, alignment: { horizontal: "center", vertical: "center" } };
+            const dataStyle = { alignment: { vertical: "center" } };
+            const numStyle = { alignment: { horizontal: "right", vertical: "center" }, numFmt: "#,##0.00" };
+            const titleStyle = { font: { bold: true, sz: 14, color: { rgb: "7A0F1F" } }, alignment: { horizontal: "center", vertical: "center" } };
+            const subtitleStyle = { font: { bold: true, color: { rgb: "666666" } }, alignment: { horizontal: "center", vertical: "center" } };
+            const balanceLabelStyle = { font: { bold: true, sz: 10, color: { rgb: "888888" } }, alignment: { horizontal: "right", vertical: "center" } };
+            const balanceNumStyle = { font: { bold: true, sz: 12, color: { rgb: "7A0F1F" } }, alignment: { horizontal: "right", vertical: "center" }, numFmt: "#,##0.00" };
+
+            ws['!cols'] = [
+                { wch: 15 }, { wch: 20 }, { wch: 25 }, { wch: 35 }, { wch: 80 }, { wch: 18 }, { wch: 25 }, { wch: 20 }, { wch: 30 }, { wch: 30 }
+            ];
+
+            ws['!merges'] = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+                { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } }
+            ];
+
+            const range = XLSX.utils.decode_range(ws['!ref'] || "A1:J10");
+
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                    if (!ws[cellAddress]) continue;
+
+                    if (R === 0 && C === 0) ws[cellAddress].s = titleStyle;
+                    else if (R === 1 && C === 0) ws[cellAddress].s = subtitleStyle;
+                    else if (R === 0 && (C === 6 || C === 7)) ws[cellAddress].s = balanceLabelStyle;
+                    else if (R === 1 && (C === 6 || C === 7)) {
+                        ws[cellAddress].s = balanceNumStyle;
+                        if (!isNaN(Number(ws[cellAddress].v))) ws[cellAddress].t = "n";
+                    } else if (R === 4) {
+                        if (ws[cellAddress].v) ws[cellAddress].s = headerStyle;
+                    } else if (R > 4) {
+                        if (C >= 5 && C <= 7) {
+                            ws[cellAddress].s = numStyle;
+                            if (ws[cellAddress].v !== "" && !isNaN(Number(ws[cellAddress].v))) ws[cellAddress].t = "n";
+                        } else {
+                            ws[cellAddress].s = dataStyle;
+                        }
+                    }
+                }
+            }
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Company Ledger");
+            XLSX.writeFile(wb, `${sanitizedName}_company_ledger.xlsx`);
+        });
+    };
 
     // API Fetches
     useEffect(() => {
@@ -594,7 +687,7 @@ function CompanyLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                 title="Company Ledger"
                 subtitle="View transaction history and running balances for companies."
                 primaryAction={
-                    <button className="flex items-center gap-2 px-4 py-2 bg-white text-[#7a0f1f] rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm">
+                    <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-white text-[#7a0f1f] rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm">
                         <Download className="w-4 h-4" />
                         Export Data
                     </button>
@@ -706,17 +799,22 @@ function CompanyLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                             <div className="flex items-center gap-6 mt-4 md:mt-0 text-right">
                                 <div>
                                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                        {activeTab === "UNIT_BUDGETS" ? "Opening Budget" : "Opening Balance"}
+                                        {activeTab === "UNIT_BUDGETS" ? "Running Budget" : "Opening Balance"}
                                     </p>
-                                    <div className="h-7 mt-0.5">
+                                    <div className="mt-0.5 flex flex-col items-end justify-center min-h-[28px]">
                                         {activeTab === "UNIT_BUDGETS" && activeBudget ? (
-                                            <p className="text-lg font-bold text-gray-900">
-                                                ₱{parseFloat(activeBudget.opening_balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-                                            </p>
+                                            <>
+                                                <p className="text-lg font-bold text-gray-900 leading-none">
+                                                    ₱{parseFloat(activeBudget.current_balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                                                </p>
+                                                <p className="text-[10px] text-gray-400 font-semibold tracking-wider mt-1 leading-none">
+                                                    OPENING: ₱{parseFloat(activeBudget.opening_balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                                                </p>
+                                            </>
                                         ) : entriesLoading ? (
-                                            <Skeleton className="h-full w-24 ml-auto" />
+                                            <Skeleton className="h-7 w-24 ml-auto" />
                                         ) : (
-                                            <p className="text-lg font-bold text-gray-900">
+                                            <p className="text-lg font-bold text-gray-900 leading-none">
                                                 ₱{openingBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
                                             </p>
                                         )}
