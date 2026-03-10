@@ -9,6 +9,7 @@ interface UnitRow {
     id: number;
     unit_name: string;
     status: string;
+    unit_budget_id?: number | null;
     property?: { id: number; name: string } | null;
 }
 
@@ -107,7 +108,12 @@ export default function CreateUnitBudgetPanel({
             setOpeningBalance(editBudget ? editBudget.opening_balance : "");
 
             if (editBudget && editBudget.units) {
-                setSelectedUnitIds(editBudget.units.map((u: any) => typeof u === 'object' ? u.id : u));
+                // Filter out any units that might be returned as inactive/suspended
+                setSelectedUnitIds(
+                    editBudget.units
+                        .filter((u: any) => typeof u !== 'object' || u.status === 'ACTIVE')
+                        .map((u: any) => typeof u === 'object' ? u.id : u)
+                );
             } else {
                 setSelectedUnitIds([]);
             }
@@ -126,6 +132,16 @@ export default function CreateUnitBudgetPanel({
         return () => { document.body.style.overflow = ""; };
     }, [open, ownerId, fetchUnits, editBudget]);
 
+    const isAvailable = useCallback((u: UnitRow) => {
+        if (u.status !== 'ACTIVE') return false;
+        if (editBudget) {
+            // Unassigned OR assigned to this current budget
+            return !u.unit_budget_id || Number(u.unit_budget_id) === Number(editBudget.id);
+        }
+        // If creating new budget, only unassigned units are available
+        return !u.unit_budget_id;
+    }, [editBudget]);
+
     if (!mounted || (!open && !isClosing)) return null;
 
     const handleClose = () => {
@@ -137,25 +153,28 @@ export default function CreateUnitBudgetPanel({
     };
 
     const toggleUnit = (id: string | number) => {
+        const unit = units.find(u => u.id === id);
+        if (unit && !isAvailable(unit)) return;
+
         setSelectedUnitIds(prev =>
             prev.includes(id) ? prev.filter(u => u !== id) : [...prev, id]
         );
     };
 
     const toggleAllUnits = () => {
-        const allVisibleIds: (string | number)[] = units.map(u => u.id);
-        if (allVisibleIds.length === 0) return;
+        const availableIds: (string | number)[] = units.filter(isAvailable).map(u => u.id);
+        if (availableIds.length === 0) return;
 
-        const allSelected = allVisibleIds.every(id => selectedUnitIds.includes(id));
+        const allSelected = availableIds.every(id => selectedUnitIds.includes(id));
 
         if (allSelected) {
-            // Deselect all visible
-            setSelectedUnitIds(prev => prev.filter(id => !allVisibleIds.includes(id)));
+            // Deselect all visible active
+            setSelectedUnitIds(prev => prev.filter(id => !availableIds.includes(id)));
         } else {
-            // Select all visible
+            // Select all visible active
             setSelectedUnitIds(prev => {
                 const newIds = [...prev];
-                allVisibleIds.forEach(id => {
+                availableIds.forEach(id => {
                     if (!newIds.includes(id)) newIds.push(id);
                 });
                 return newIds;
@@ -163,8 +182,10 @@ export default function CreateUnitBudgetPanel({
         }
     };
 
-    // check if all currently visible are selected
-    const allVisibleSelected = units.length > 0 && units.every(u => selectedUnitIds.includes(u.id));
+    // check if all currently visible active are selected
+    const allVisibleSelected = units.length > 0
+        && units.filter(isAvailable).length > 0
+        && units.filter(isAvailable).every(u => selectedUnitIds.includes(u.id));
 
     const submit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -361,6 +382,18 @@ export default function CreateUnitBudgetPanel({
                                             ),
                                             width: "50px",
                                             renderCell: (row) => {
+                                                const available = isAvailable(row);
+                                                if (!available) {
+                                                    const alreadyAssigned = row.status === 'ACTIVE' && !!row.unit_budget_id;
+                                                    return (
+                                                        <div
+                                                            className="flex items-center justify-center opacity-40 cursor-not-allowed"
+                                                            title={alreadyAssigned ? "Already assigned to another budget" : "Inactive or Suspended"}
+                                                        >
+                                                            {alreadyAssigned ? <CheckSquare className="w-5 h-5 text-gray-500" /> : <Square className="w-5 h-5 text-gray-400" />}
+                                                        </div>
+                                                    );
+                                                }
                                                 const isSelected = selectedUnitIds.includes(row.id);
                                                 return (
                                                     <div className="flex items-center justify-center">

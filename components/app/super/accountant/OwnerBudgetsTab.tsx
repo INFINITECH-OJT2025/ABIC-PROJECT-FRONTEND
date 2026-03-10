@@ -118,95 +118,94 @@ export default function OwnerBudgetsTab({
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 gap-3">
-                    {filteredBudgets.map((budget) => (
-                    <div
-                    key={budget.id}
-                    onClick={() => setEditPanelBudget(budget)}
-                    className="cursor-pointer bg-white rounded-xl border border-gray-200 hover:shadow-md transition overflow-hidden group"
-                    >
+                        {filteredBudgets.map((budget) => (
+                            <div
+                                key={budget.id}
+                                onClick={() => setEditPanelBudget(budget)}
+                                className="cursor-pointer bg-white rounded-xl border border-gray-200 hover:shadow-md transition overflow-hidden group"
+                            >
 
-                    {/* HEADER */}
-                    <div className="bg-gradient-to-r from-[#7a0f1f] to-[#9f1d2d] px-5 py-3 flex items-center justify-between text-white">
-                        <div className="flex items-center gap-2">
-                            <Wallet className="w-4 h-4 opacity-90" />
-                            <h3 className="font-semibold text-sm tracking-wide">
-                                {budget.budget_name}
-                            </h3>
-                        </div>
+                                {/* HEADER */}
+                                <div className="bg-gradient-to-r from-[#7a0f1f] to-[#9f1d2d] px-5 py-3 flex items-center justify-between text-white">
+                                    <div className="flex items-center gap-2">
+                                        <Wallet className="w-4 h-4 opacity-90" />
+                                        <h3 className="font-semibold text-sm tracking-wide">
+                                            {budget.budget_name}
+                                        </h3>
+                                    </div>
 
-                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold tracking-wider ${
-                            budget.status === "ACTIVE"
-                            ? "bg-green-400/20 text-green-100"
-                            : "bg-white/20 text-gray-100"
-                        }`}>
-                            {budget.status}
-                        </span>
-                    </div>
-
-                    {/* BODY */}
-                    <div className="px-5 py-2 space-y-2">
-
-                        <div className="pt-2">
-                            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">
-                                Running Balance
-                            </p>
-
-                            <p className="text-[26px] font-bold text-[#7a0f1f] tracking-tight">
-                                ₱{parseFloat(budget.current_balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-                            </p>
-                        </div>
-
-                    </div>
-
-                    {/* FOOTER */}
-                    <div className="px-5 py-3 border-t bg-gray-50 flex items-center justify-between">
-
-                        {budget.units && budget.units.length > 0 ? (
-                            <div className="text-xs font-medium text-gray-600 flex items-center gap-2">
-                                <div className="w-6 h-6 rounded bg-white border flex items-center justify-center text-[#7a0f1f] font-semibold">
-                                    {budget.units.length}
+                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold tracking-wider ${budget.status === "ACTIVE"
+                                        ? "bg-green-500 text-white shadow-sm"
+                                        : "bg-white/20 text-gray-100"
+                                        }`}>
+                                        {budget.status}
+                                    </span>
                                 </div>
-                                Linked Unit{budget.units.length > 1 ? "s" : ""}
+
+                                {/* BODY */}
+                                <div className="px-5 py-2 space-y-2">
+
+                                    <div className="pt-2">
+                                        <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">
+                                            Running Budget
+                                        </p>
+
+                                        <p className="text-[26px] font-bold text-[#7a0f1f] tracking-tight">
+                                            ₱{parseFloat(budget.current_balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+
+                                </div>
+
+                                {/* FOOTER */}
+                                <div className="px-5 py-3 border-t bg-gray-50 flex items-center justify-between">
+
+                                    {budget.units && budget.units.length > 0 ? (
+                                        <div className="text-xs font-medium text-gray-600 flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded bg-white border flex items-center justify-center text-[#7a0f1f] font-semibold">
+                                                {budget.units.length}
+                                            </div>
+                                            Linked Unit{budget.units.length > 1 ? "s" : ""}
+                                        </div>
+                                    ) : (
+                                        <div className="text-xs text-gray-500 flex items-center gap-1">
+                                            <Plus className="w-3.5 h-3.5" />
+                                            Assign Units
+                                        </div>
+                                    )}
+
+                                    <div className="flex gap-1">
+
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setLedgerPanelBudget(budget); }}
+                                            className="p-1.5 rounded-md border text-gray-600 hover:text-[#7a0f1f] hover:border-[#7a0f1f]/40 bg-white"
+                                            title="Ledger"
+                                        >
+                                            <List className="w-4 h-4" />
+                                        </button>
+
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setTransactionPanelBudget(budget); setActionType("ADD"); }}
+                                            className="p-1.5 rounded-md border text-green-700 hover:bg-green-600 hover:text-white"
+                                            title="Add Funds"
+                                        >
+                                            <ArrowUpToLine className="w-4 h-4" />
+                                        </button>
+
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setTransactionPanelBudget(budget); setActionType("DEDUCT"); }}
+                                            className="p-1.5 rounded-md border text-red-700 hover:bg-red-600 hover:text-white"
+                                            title="Deduct Funds"
+                                        >
+                                            <ArrowDownToLine className="w-4 h-4" />
+                                        </button>
+
+                                    </div>
+
+                                </div>
+
                             </div>
-                        ) : (
-                            <div className="text-xs text-gray-500 flex items-center gap-1">
-                                <Plus className="w-3.5 h-3.5"/>
-                                Assign Units
-                            </div>
-                        )}
-
-                        <div className="flex gap-1">
-
-                            <button
-                            onClick={(e)=>{e.stopPropagation();setLedgerPanelBudget(budget);}}
-                            className="p-1.5 rounded-md border text-gray-600 hover:text-[#7a0f1f] hover:border-[#7a0f1f]/40 bg-white"
-                            title="Ledger"
-                            >
-                            <List className="w-4 h-4"/>
-                            </button>
-
-                            <button
-                            onClick={(e)=>{e.stopPropagation();setTransactionPanelBudget(budget);setActionType("ADD");}}
-                            className="p-1.5 rounded-md border text-green-700 hover:bg-green-600 hover:text-white"
-                            title="Add Funds"
-                            >
-                            <ArrowUpToLine className="w-4 h-4"/>
-                            </button>
-
-                            <button
-                            onClick={(e)=>{e.stopPropagation();setTransactionPanelBudget(budget);setActionType("DEDUCT");}}
-                            className="p-1.5 rounded-md border text-red-700 hover:bg-red-600 hover:text-white"
-                            title="Deduct Funds"
-                            >
-                            <ArrowDownToLine className="w-4 h-4"/>
-                            </button>
-
-                        </div>
-
-                    </div>
-
-                    </div>
-                    ))}
+                        ))}
                     </div>
                 )}
             </div>

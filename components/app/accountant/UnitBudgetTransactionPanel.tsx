@@ -30,9 +30,6 @@ export default function UnitBudgetTransactionPanel({
     const [isClosing, setIsClosing] = useState(false);
 
     const [amount, setAmount] = useState("");
-    const [voucherNo, setVoucherNo] = useState("");
-    const [referenceNo, setReferenceNo] = useState("");
-    const [description, setDescription] = useState("");
     const [date, setDate] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState("");
@@ -42,9 +39,6 @@ export default function UnitBudgetTransactionPanel({
         if (open) {
             setIsClosing(false);
             setAmount("");
-            setVoucherNo("");
-            setReferenceNo("");
-            setDescription("");
             setDate(new Date().toISOString().split("T")[0]);
             setError("");
         }
@@ -84,9 +78,6 @@ export default function UnitBudgetTransactionPanel({
                 body: JSON.stringify({
                     transaction_type: initialAction,
                     amount: parsedAmount,
-                    voucher_no: voucherNo || null,
-                    fund_reference: referenceNo || null,
-                    description,
                     transaction_date: date
                 })
             });
@@ -193,39 +184,6 @@ export default function UnitBudgetTransactionPanel({
                                     className={`w-full pl-9 pr-4 py-2.5 rounded-lg border border-gray-300 focus:outline-none focus:ring-1 focus:ring-opacity-50 transition-shadow text-sm ${initialAction === "ADD" ? "focus:border-green-600 focus:ring-green-600" : "focus:border-[#7a0f1f] focus:ring-[#7a0f1f]"}`}
                                 />
                             </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Voucher No. (Optional)</label>
-                            <input
-                                type="text"
-                                value={voucherNo}
-                                onChange={(e) => setVoucherNo(e.target.value)}
-                                placeholder="e.g. VOUCHER-ABCD"
-                                className={`w-full px-4 py-2 text-sm rounded-lg border border-gray-300 focus:outline-none focus:ring-1 focus:ring-opacity-50 transition-shadow ${initialAction === "ADD" ? "focus:border-green-600 focus:ring-green-600" : "focus:border-[#7a0f1f] focus:ring-[#7a0f1f]"}`}
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Reference No. (Optional)</label>
-                            <input
-                                type="text"
-                                value={referenceNo}
-                                onChange={(e) => setReferenceNo(e.target.value)}
-                                placeholder="Cheque / Draft No."
-                                className={`w-full px-4 py-2 text-sm rounded-lg border border-gray-300 focus:outline-none focus:ring-1 focus:ring-opacity-50 transition-shadow ${initialAction === "ADD" ? "focus:border-green-600 focus:ring-green-600" : "focus:border-[#7a0f1f] focus:ring-[#7a0f1f]"}`}
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Description</label>
-                            <textarea
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                placeholder="Particulars / Reason..."
-                                rows={2}
-                                className={`w-full px-4 py-2 text-sm rounded-lg border border-gray-300 focus:outline-none focus:ring-1 focus:ring-opacity-50 transition-shadow resize-none ${initialAction === "ADD" ? "focus:border-green-600 focus:ring-green-600" : "focus:border-[#7a0f1f] focus:ring-[#7a0f1f]"}`}
-                            />
                         </div>
                     </form>
                 </div>
