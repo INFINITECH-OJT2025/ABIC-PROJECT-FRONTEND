@@ -38,7 +38,6 @@ export default function UnitBudgetLedgerPanel({
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [isClosing, setIsClosing] = useState(false);
-    const [showExtraColumns, setShowExtraColumns] = useState(false);
 
     const fetchTransactions = React.useCallback(() => {
         if (!budget) return;
@@ -82,16 +81,6 @@ export default function UnitBudgetLedgerPanel({
             renderCell: (row) => new Date(row.transaction_date).toLocaleDateString("en-PH", { month: 'short', day: 'numeric', year: 'numeric' })
         },
         {
-            key: "voucher_no",
-            label: "VOUCHER NO.",
-            align: "center",
-            width: "180px",
-            minWidth: "180px",
-            maxWidth: "180px",
-            sortable: true,
-            renderCell: (row) => row.voucher_no || "—"
-        },
-        {
             key: "transaction_type",
             label: "TRANS TYPE",
             align: "center",
@@ -109,15 +98,13 @@ export default function UnitBudgetLedgerPanel({
             key: "description",
             label: "PARTICULARS",
             align: "left",
-            width: "400px",
-            minWidth: "400px",
-            maxWidth: "400px",
+            flex: true,
             sortable: true,
             renderCell: (row) => row.description || "—"
         },
         {
             key: "deposit",
-            label: "DEPOSIT",
+            label: "ADD",
             align: "right",
             width: "140px",
             minWidth: "140px",
@@ -131,7 +118,7 @@ export default function UnitBudgetLedgerPanel({
         },
         {
             key: "withdrawal",
-            label: "WITHDRAWAL",
+            label: "DEDUC",
             align: "right",
             width: "140px",
             minWidth: "140px",
@@ -145,7 +132,7 @@ export default function UnitBudgetLedgerPanel({
         },
         {
             key: "running_balance",
-            label: "OUTS. BALANCE",
+            label: "TOTAL",
             align: "right",
             width: "140px",
             minWidth: "140px",
@@ -156,18 +143,8 @@ export default function UnitBudgetLedgerPanel({
                     ₱{parseFloat(row.running_balance || row.amount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
                 </span>
             )
-        },
-        {
-            key: "fund_reference",
-            label: "FUND REFERENCES",
-            align: "left",
-            minWidth: "180px",
-            maxWidth: "180px",
-            hidden: !showExtraColumns,
-            sortable: true,
-            renderCell: (row) => row.fund_reference || "-"
         }
-    ], [showExtraColumns]);
+    ], []);
 
     if (!open && !isClosing) return null;
 
@@ -182,7 +159,7 @@ export default function UnitBudgetLedgerPanel({
 
             {/* Panel */}
             <div
-                className="fixed top-0 right-0 bottom-0 h-screen w-full max-w-[85vw] md:max-w-5xl bg-white z-50 flex flex-col shadow-xl transition-all duration-300 ease-in-out"
+                className="fixed top-0 right-0 bottom-0 h-screen w-full max-w-[85vw] md:max-w-[72rem] bg-white z-50 flex flex-col shadow-xl transition-all duration-300 ease-in-out"
                 style={{
                     animation: isClosing ? "slideOut 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards" : "slideIn 0.4s cubic-bezier(0.32, 0.72, 0, 1)",
                 }}
@@ -212,13 +189,6 @@ export default function UnitBudgetLedgerPanel({
                 <div className="flex-1 flex flex-col min-h-0 bg-gray-50/50 p-6 overflow-hidden">
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
                         <h3 className="text-lg font-bold text-gray-900 border-l-4 border-[#7a0f1f] pl-3">Transaction History</h3>
-                        <button
-                            onClick={() => setShowExtraColumns(!showExtraColumns)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-[#7a0f1f] bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100"
-                        >
-                            {showExtraColumns ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                            {showExtraColumns ? "Hide Extra Columns" : "Show Extra Columns"}
-                        </button>
                     </div>
 
                     <div className="flex-1 bg-white border border-gray-200 shadow-sm rounded-lg overflow-hidden flex flex-col min-h-0">

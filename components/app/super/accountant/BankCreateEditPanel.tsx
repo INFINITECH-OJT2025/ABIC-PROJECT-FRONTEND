@@ -201,11 +201,8 @@ export default function BankCreateEditPanel({
                 name: name.trim(),
                 short_name: shortName.trim() || null,
                 country: country.trim() || null,
+                status: status,
             };
-
-            if (isEdit) {
-                payload.status = status;
-            }
 
             const pageUrl = typeof window !== "undefined" ? window.location.href : "";
             const headers: Record<string, string> = { "Content-Type": "application/json" };

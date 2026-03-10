@@ -263,6 +263,213 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
     // Filter/Pagination states
     const [currentPage, setCurrentPage] = useState(1);
 
+    const handleExport = () => {
+        if (!entries || entries.length === 0) {
+            showToast("Info", "No data to export.", "info");
+            return;
+        }
+
+        import("xlsx-js-style").then((m) => {
+            const XLSX = m.default || m;
+            const currentOwnerName = owners.find(o => String(o.id) === String(selectedOwnerId))?.name ?? "Owner";
+            const sanitizedName = currentOwnerName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+            const runningBalanceVal = entries.length > 0 ? entries[entries.length - 1].outsBalance : 0;
+
+            const ws = XLSX.utils.json_to_sheet([]);
+
+            // Add the Title section
+            XLSX.utils.sheet_add_aoa(ws, [
+                ["ABIC REALTY & CONSULTANCY CORPORATION 2025"],
+                [currentOwnerName.toUpperCase()],
+                [], // Spacer
+            ], { origin: "A1" });
+
+            // Add the Balances to the right (Columns G and H)
+            XLSX.utils.sheet_add_aoa(ws, [
+                ["OPENING BALANCE", "RUNNING BALANCE"],
+                [openingBalance || 0, runningBalanceVal]
+            ], { origin: "G1" });
+
+            // Build rows one-by-one, expanding rows for multiple instrument attachments
+            const baseUrl = window.location.origin;
+            const allRows: any[][] = [];
+            const hyperlinkCells: { r: number; c: number; url: string; text: string }[] = [];
+
+            // Header row at index 0 in allRows (will be placed at Excel row 5, 0-indexed row 4)
+            allRows.push(["DATE", "VOUCHER NO.", "TRANS TYPE", "OWNER", "PARTICULARS", "DEPOSIT", "WITHDRAWAL", "OUTS. BALANCE", "FUND REFERENCES", "PERSON IN CHARGE"]);
+
+            entries.forEach((entry) => {
+                const mainRowIdx = allRows.length; // index within allRows
+
+                // Main data row
+                allRows.push([
+                    entry.voucherDate,
+                    entry.voucherNo,
+                    entry.transType,
+                    entry.owner,
+                    entry.particulars,
+                    entry.deposit > 0 ? entry.deposit : "",
+                    entry.withdrawal > 0 ? entry.withdrawal : "",
+                    entry.outsBalance,
+                    entry.fundReference || "-",
+                    entry.personInCharge || "-"
+                ]);
+
+                // Voucher No. hyperlink (column B)
+                if (entry.voucherAttachmentUrl) {
+                    const fullUrl = entry.voucherAttachmentUrl.startsWith("http") ? entry.voucherAttachmentUrl : `${baseUrl}${entry.voucherAttachmentUrl}`;
+                    hyperlinkCells.push({ r: mainRowIdx + 4, c: 1, url: fullUrl, text: entry.voucherNo || "—" });
+                }
+
+                // Trans Type — handle instrument attachments
+                const instrumentFiles = entry.instrumentAttachments ?? [];
+                if (instrumentFiles.length > 0) {
+                    // First file — replace trans type text and add direct hyperlink
+                    const firstFile = instrumentFiles[0];
+                    const firstName = firstFile.instrumentNo ?? firstFile.file_name ?? firstFile.name ?? "—";
+                    const firstUrl = firstFile.attachmentUrl ?? firstFile.file_url ?? firstFile.url ?? null;
+                    allRows[mainRowIdx][2] = firstName;
+                    if (firstUrl) {
+                        const fullUrl = firstUrl.startsWith("http") ? firstUrl : `${baseUrl}${firstUrl}`;
+                        hyperlinkCells.push({ r: mainRowIdx + 4, c: 2, url: fullUrl, text: firstName });
+                    }
+
+                    // Additional files — each gets its own sub-row with its own direct hyperlink
+                    for (let fi = 1; fi < instrumentFiles.length; fi++) {
+                        const file = instrumentFiles[fi];
+                        const fileName = file.instrumentNo ?? file.file_name ?? file.name ?? "—";
+                        const fileUrl = file.attachmentUrl ?? file.file_url ?? file.url ?? null;
+                        const subRowIdx = allRows.length;
+                        allRows.push(["", "", fileName, "", "", "", "", "", "", ""]);
+                        if (fileUrl) {
+                            const fullUrl = fileUrl.startsWith("http") ? fileUrl : `${baseUrl}${fileUrl}`;
+                            hyperlinkCells.push({ r: subRowIdx + 4, c: 2, url: fullUrl, text: fileName });
+                        }
+                    }
+                }
+            });
+
+            // Write all rows starting at A5
+            XLSX.utils.sheet_add_aoa(ws, allRows, { origin: "A5" });
+
+            // Apply HYPERLINK formulas (each is a simple direct URL — no long gallery URLs)
+            hyperlinkCells.forEach(({ r, c, url, text }) => {
+                const cellAddr = XLSX.utils.encode_cell({ r, c });
+                const safeUrl = url.replace(/"/g, '""');
+                const safeText = String(text).replace(/"/g, '""');
+                ws[cellAddr] = {
+                    t: 'str',
+                    f: `HYPERLINK("${safeUrl}","${safeText}")`,
+                    s: {
+                        font: { bold: true, color: { rgb: "0563C1" }, underline: true },
+                        alignment: { vertical: "center" },
+                        protection: { locked: true }
+                    }
+                };
+            });
+
+            // Define styling
+            const headerStyle = {
+                font: { bold: true, color: { rgb: "FFFFFF" } },
+                fill: { fgColor: { rgb: "7A0F1F" } }, // Maroon
+                alignment: { horizontal: "center", vertical: "center" }
+            };
+
+            const dataStyle = {
+                alignment: { vertical: "center" }
+            };
+
+            const numStyle = {
+                alignment: { horizontal: "right", vertical: "center" },
+                numFmt: "#,##0.00"
+            };
+
+            const titleStyle = {
+                font: { bold: true, sz: 14, color: { rgb: "7A0F1F" } },
+                alignment: { horizontal: "center", vertical: "center" }
+            };
+
+            const subtitleStyle = {
+                font: { bold: true, color: { rgb: "666666" } },
+                alignment: { horizontal: "center", vertical: "center" }
+            };
+
+            const balanceLabelStyle = {
+                font: { bold: true, sz: 10, color: { rgb: "888888" } },
+                alignment: { horizontal: "right", vertical: "center" }
+            };
+
+            const balanceNumStyle = {
+                font: { bold: true, sz: 12, color: { rgb: "7A0F1F" } },
+                alignment: { horizontal: "right", vertical: "center" },
+                numFmt: "#,##0.00"
+            };
+
+            // Set Column Widths
+            ws['!cols'] = [
+                { wch: 15 }, // A: DATE
+                { wch: 20 }, // B: VOUCHER NO
+                { wch: 25 }, // C: TRANS TYPE (increased from 15)
+                { wch: 35 }, // D: OWNER (increased from 25)
+                { wch: 80 }, // E: PARTICULARS (increased from 60)
+                { wch: 18 }, // F: DEPOSIT
+                { wch: 18 }, // G: WITHDRAWAL
+                { wch: 20 }, // H: OUTS BALANCE
+                { wch: 30 }, // I: FUND REFERENCES (increased from 20)
+                { wch: 30 }, // J: PERSON IN CHARGE (increased from 20)
+            ];
+
+            // Merge cells for Title and Subtitle so they don't clip
+            ws['!merges'] = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }, // ABIC REALTY...
+                { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } }  // Owner name
+            ];
+
+            const range = XLSX.utils.decode_range(ws['!ref'] || "A1:J10");
+
+            // Apply styles
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                    if (!ws[cellAddress]) continue;
+
+                    if (R === 0 && C === 0) {
+                        ws[cellAddress].s = titleStyle;
+                    } else if (R === 1 && C === 0) {
+                        ws[cellAddress].s = subtitleStyle;
+                    } else if (R === 0 && (C === 6 || C === 7)) { // G1, H1: Balance Labels
+                        ws[cellAddress].s = balanceLabelStyle;
+                    } else if (R === 1 && (C === 6 || C === 7)) { // G2, H2: Balance Nums
+                        ws[cellAddress].s = balanceNumStyle;
+                        if (!isNaN(Number(ws[cellAddress].v))) {
+                            ws[cellAddress].t = "n"; // Force number formatting
+                        }
+                    } else if (R === 4) { // Table Header (index 4 is Row 5)
+                        if (ws[cellAddress].v) ws[cellAddress].s = headerStyle;
+                    } else if (R > 4) { // Table Data
+                        // Skip cells with HYPERLINK formulas (they have their own style)
+                        if (ws[cellAddress].f && String(ws[cellAddress].f).startsWith("HYPERLINK")) continue;
+                        // Deposit, Withdrawal, Outs Balance are cols 5, 6, 7 (F, G, H)
+                        if (C >= 5 && C <= 7) {
+                            ws[cellAddress].s = numStyle;
+                            if (ws[cellAddress].v !== "" && !isNaN(Number(ws[cellAddress].v))) {
+                                ws[cellAddress].t = "n"; // Force number formatting
+                            }
+                        } else {
+                            ws[cellAddress].s = dataStyle;
+                        }
+                    }
+                }
+            }
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Ledger");
+
+            XLSX.writeFile(wb, `${sanitizedName}_ledger.xlsx`);
+        });
+    };
+
     // API Fetches
     useEffect(() => {
         setOwnersLoading(true);
@@ -544,7 +751,10 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                 title="Main Owner Ledger"
                 subtitle="View transaction history and running balances for main owners."
                 primaryAction={
-                    <button className="flex items-center gap-2 px-4 py-2 bg-white text-[#7a0f1f] rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm">
+                    <button
+                        onClick={handleExport}
+                        className="flex items-center gap-2 px-4 py-2 bg-white text-[#7a0f1f] rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm"
+                    >
                         <Download className="w-4 h-4" />
                         Export Data
                     </button>
@@ -640,7 +850,7 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                     </div>
                 </section>
             </div>
-            
+
             {/* Transaction Action Modal */}
             {actionModalTx && (
                 <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
