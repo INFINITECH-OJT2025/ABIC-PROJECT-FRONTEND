@@ -98,6 +98,7 @@ export const superAdminNav: NavEntry[] = [
             { label: "Client Ledger", href: "/super/accountant/ledger/client", icon: BookOpen },
             { label: "Company Ledger", href: "/super/accountant/ledger/company", icon: BookOpen },
             { label: "System Ledger", href: "/super/accountant/ledger/system", icon: BookOpen },
+            { label: "Archival", href: "/super/accountant/ledger/archival", icon: FolderOpen },
         ],
     },
 
@@ -165,6 +166,7 @@ export const accountantNav: NavEntry[] = [
             { label: "Client Ledger", href: "/accountant/ledger/client", icon: BookOpen },
             { label: "Company Ledger", href: "/accountant/ledger/company", icon: BookOpen },
             { label: "System Ledger", href: "/accountant/ledger/system", icon: BookOpen },
+            { label: "Archival", href: "/accountant/ledger/archival", icon: FolderOpen },
         ],
     },
 
@@ -240,6 +242,7 @@ export const viewerNav: NavEntry[] = [
             { label: "Client Ledger", href: "/viewer/accountant/ledger/client", icon: BookOpen },
             { label: "Company Ledger", href: "/viewer/accountant/ledger/company", icon: BookOpen },
             { label: "System Ledger", href: "/viewer/accountant/ledger/system", icon: BookOpen },
+            { label: "Archival", href: "/viewer/accountant/ledger/archival", icon: FolderOpen },
         ],
     },
     {

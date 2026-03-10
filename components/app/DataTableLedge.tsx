@@ -281,6 +281,8 @@ export interface DataTableProps<T = any> {
     onPageChange?: (page: number) => void
     /** Plural label for the record type, e.g. "admins", "accountants" */
     itemName?: string
+    /** Optional max height for vertical scrolling */
+    maxHeight?: string
     /** Optional function to generate a specific ID string for a row (useful for URL hash scrolling) */
     getRowId?: (row: T) => string
     /** If provided, after rows render, it will smooth-scroll this row ID into view */
@@ -440,6 +442,7 @@ export default function DataTableLedge<T extends Record<string, any>>({
     pagination,
     onPageChange,
     itemName = "items",
+    maxHeight,
     getRowId,
     highlightRowId,
 }: DataTableProps<T>) {
@@ -486,6 +489,7 @@ export default function DataTableLedge<T extends Record<string, any>>({
         const el = scrollRef.current
         if (!el) return
         const onWheel = (e: WheelEvent) => {
+            if (maxHeight) return // Allow native vertical scroll if maxHeight is set
             if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return // already horizontal gesture
             if (e.deltaY === 0) return
             e.preventDefault()
@@ -536,21 +540,25 @@ export default function DataTableLedge<T extends Record<string, any>>({
             ) : null}
 
             {/* ── Table ── */}
-            <div ref={scrollRef} className="w-full overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
+            <div
+                ref={scrollRef}
+                className={`w-full overflow-x-auto ${maxHeight ? "overflow-y-auto custom-scrollbar" : ""}`}
+                style={maxHeight ? { maxHeight } : {}}
+            >
+                <table className={`w-full text-sm ${maxHeight ? "border-separate border-spacing-0" : "border-collapse"}`}>
                     <thead>
-                        <tr className="sticky top-0 z-10 border-b border-gray-200">
+                        <tr>
                             {visibleColumns.map((col, colIndex) => {
                                 const isActive = sortKey === col.key
-                                const isAlt = colIndex % 2 === 1
                                 return (
                                     <th
                                         key={col.key}
                                         className={`
-                                            px-4 py-2 font-bold text-xs uppercase tracking-wider whitespace-pre-wrap
-                                            select-none
+                                            px-6 py-4 font-bold text-xs uppercase tracking-wider whitespace-pre-wrap
+                                            select-none sticky top-0 z-10
                                             ${col.sortable ? "cursor-pointer transition-colors" : ""}
                                             ${col.headerClassName ? col.headerClassName : "text-white bg-[#7a0f1f] hover:bg-[#65101a]"}
+                                            ${maxHeight ? "border-b border-gray-200" : ""}
                                         `}
                                         style={{ width: col.width, minWidth: col.minWidth, maxWidth: col.maxWidth }}
                                         onClick={() => handleHeaderClick(col)}
@@ -613,7 +621,7 @@ export default function DataTableLedge<T extends Record<string, any>>({
                                             return (
                                                 <td
                                                     key={col.key}
-                                                    className={`px-4 py-2 text-sm text-gray-900 font-medium ${alignClass(col.align)} ${col.flex ? "w-full" : ""}`}
+                                                    className={`px-6 py-4 text-base text-gray-900 font-normal ${alignClass(col.align)} ${col.flex ? "w-full" : ""}`}
                                                     style={{ width: col.width, minWidth: col.minWidth, maxWidth: col.maxWidth }}
                                                 >
                                                     {/* All cells are forced single-line with tooltip on overflow */}
