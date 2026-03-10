@@ -17,6 +17,7 @@ import DataTableLedge, { InstrumentFilesPopover, VoucherPreviewButton } from "@/
 import InfoTooltip from "@/components/app/InfoTooltip";
 import SharedToolbar from "@/components/app/SharedToolbar";
 import { DataTableColumn } from "@/components/app/DataTable";
+import { useAppToast } from "@/components/app/toast/AppToastProvider";
 
 // ─── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -67,6 +68,95 @@ function SystemLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
     // Filter/Pagination states
     const [currentPage, setCurrentPage] = useState(1);
+
+    const { showToast } = useAppToast();
+
+    const handleExport = () => {
+        if (!entries || entries.length === 0) {
+            showToast("Info", "No data to export.", "info");
+            return;
+        }
+
+        import("xlsx-js-style").then((m) => {
+            const XLSX = m.default || m;
+
+            const runningBalanceVal = entries.length > 0 ? entries[entries.length - 1].outsBalance : 0;
+            const ws = XLSX.utils.json_to_sheet([]);
+
+            XLSX.utils.sheet_add_aoa(ws, [
+                ["ABIC REALTY & CONSULTANCY CORPORATION 2025"],
+                [ownerName.toUpperCase()],
+                [], // Spacer
+            ], { origin: "A1" });
+
+            XLSX.utils.sheet_add_aoa(ws, [
+                ["OPENING BALANCE", "RUNNING BALANCE"],
+                [openingBalance || 0, runningBalanceVal]
+            ], { origin: "G1" });
+
+            const exportData = entries.map(entry => ({
+                "DATE": entry.voucherDate,
+                "VOUCHER NO.": entry.voucherNo,
+                "TRANS TYPE": entry.transType,
+                "OWNER": entry.owner,
+                "PARTICULARS": entry.particulars,
+                "DEPOSIT": entry.deposit > 0 ? entry.deposit : "",
+                "WITHDRAWAL": entry.withdrawal > 0 ? entry.withdrawal : "",
+                "OUTS. BALANCE": entry.outsBalance,
+                "FUND REFERENCES": entry.fundReference || "-",
+                "PERSON IN CHARGE": entry.personInCharge || "-"
+            }));
+
+            XLSX.utils.sheet_add_json(ws, exportData, { origin: "A5", skipHeader: false });
+
+            const headerStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "7A0F1F" } }, alignment: { horizontal: "center", vertical: "center" } };
+            const dataStyle = { alignment: { vertical: "center" } };
+            const numStyle = { alignment: { horizontal: "right", vertical: "center" }, numFmt: "#,##0.00" };
+            const titleStyle = { font: { bold: true, sz: 14, color: { rgb: "7A0F1F" } }, alignment: { horizontal: "center", vertical: "center" } };
+            const subtitleStyle = { font: { bold: true, color: { rgb: "666666" } }, alignment: { horizontal: "center", vertical: "center" } };
+            const balanceLabelStyle = { font: { bold: true, sz: 10, color: { rgb: "888888" } }, alignment: { horizontal: "right", vertical: "center" } };
+            const balanceNumStyle = { font: { bold: true, sz: 12, color: { rgb: "7A0F1F" } }, alignment: { horizontal: "right", vertical: "center" }, numFmt: "#,##0.00" };
+
+            ws['!cols'] = [
+                { wch: 15 }, { wch: 20 }, { wch: 25 }, { wch: 35 }, { wch: 80 }, { wch: 18 }, { wch: 25 }, { wch: 20 }, { wch: 30 }, { wch: 30 }
+            ];
+
+            ws['!merges'] = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+                { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } }
+            ];
+
+            const range = XLSX.utils.decode_range(ws['!ref'] || "A1:J10");
+
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                    if (!ws[cellAddress]) continue;
+
+                    if (R === 0 && C === 0) ws[cellAddress].s = titleStyle;
+                    else if (R === 1 && C === 0) ws[cellAddress].s = subtitleStyle;
+                    else if (R === 0 && (C === 6 || C === 7)) ws[cellAddress].s = balanceLabelStyle;
+                    else if (R === 1 && (C === 6 || C === 7)) {
+                        ws[cellAddress].s = balanceNumStyle;
+                        if (!isNaN(Number(ws[cellAddress].v))) ws[cellAddress].t = "n";
+                    } else if (R === 4) {
+                        if (ws[cellAddress].v) ws[cellAddress].s = headerStyle;
+                    } else if (R > 4) {
+                        if (C >= 5 && C <= 7) {
+                            ws[cellAddress].s = numStyle;
+                            if (ws[cellAddress].v !== "" && !isNaN(Number(ws[cellAddress].v))) ws[cellAddress].t = "n";
+                        } else {
+                            ws[cellAddress].s = dataStyle;
+                        }
+                    }
+                }
+            }
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "System Ledger");
+            XLSX.writeFile(wb, `system_ledger.xlsx`);
+        });
+    };
 
     const fetchLedger = useCallback(() => {
         setEntriesLoading(true);
@@ -319,7 +409,7 @@ function SystemLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                 title="System Ledger"
                 subtitle="View transaction history and running balances for the system owner."
                 primaryAction={
-                    <button className="flex items-center gap-2 px-4 py-2 bg-white text-[#7a0f1f] rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm">
+                    <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-white text-[#7a0f1f] rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm">
                         <Download className="w-4 h-4" />
                         Export Data
                     </button>
