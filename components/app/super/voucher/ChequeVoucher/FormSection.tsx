@@ -225,6 +225,8 @@ export default function FormSection({
                         onInputChange("paidTo", val);
                         setShowSuggestions(true);
                       }}
+                      minLength={3}
+                      maxLength={35}
                       onFocus={() => setShowSuggestions(true)}
                       onBlur={() => { setTimeout(() => setShowSuggestions(false), 200); }}
                       id="paidTo"
@@ -417,6 +419,8 @@ export default function FormSection({
                           const val = e.target.value.replace(/\D/g, "");
                           onInputChange("checkNo", val);
                         }}
+                        minLength={3}
+                        maxLength={15}
                         id="checkNo"
                         className={fieldClass}
                       />
@@ -433,18 +437,48 @@ export default function FormSection({
                         <Banknote className="h-4 w-4" />
                       </div>
                       <input
-                        type="text"
-                        inputMode="decimal"
-                        value={formData.amount ?? ""}
-                        onChange={(e) => {
-                          if (errors.amount && e.target.value.trim()) setErrors(prev => { const nv = { ...prev }; delete nv.amount; return nv; });
-                          const val = e.target.value.replace(/[^0-9.]/g, "");
-                          onInputChange("amount", val);
-                        }}
-                        id="amount"
-                        className={`${amountFieldClass} ${touched.amount && errors.amount ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                        placeholder="0.00"
-                      />
+                      type="text"
+                      inputMode="decimal"
+                      value={
+                        formData.amount
+                          ? Number(formData.amount.replace(/,/g, "")).toLocaleString("en-PH", {
+                              maximumFractionDigits: 2,
+                            })
+                          : ""
+                      }
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/[^0-9.]/g, "");
+                        const num = parseFloat(raw);
+
+                        if (errors.amount && e.target.value.trim()) {
+                          setErrors((prev) => {
+                            const nv = { ...prev };
+                            delete nv.amount;
+                            return nv;
+                          });
+                        }
+
+                        // validation
+                        if (num === 0) {
+                          setErrors((prev) => ({ ...prev, amount: "Amount cannot be 0" }));
+                          return;
+                        }
+
+                        if (num > 10000000) {
+                          setErrors((prev) => ({ ...prev, amount: "Amount cannot exceed 10,000,000" }));
+                          return;
+                        }
+
+                        onInputChange("amount", raw);
+                      }}
+                      id="amount"
+                      className={`${amountFieldClass} ${
+                        touched.amount && errors.amount
+                          ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                          : ""
+                      }`}
+                      placeholder="0.00"
+                    />
                     </div>
                     {touched.amount && errors.amount && (
                       <FormTooltipError message={errors.amount} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.amount; return nv; })} />
@@ -465,6 +499,8 @@ export default function FormSection({
                           const val = e.target.value.replace(/\D/g, "");
                           onInputChange("accountNumber", val);
                         }}
+                        minLength={3}
+                        maxLength={15}
                         id="accountNumber"
                         className={fieldClass}
                       />
@@ -492,6 +528,8 @@ export default function FormSection({
                     id="projectDetails"
                     className={fieldClass}
                     placeholder="Project title or details"
+                    minLength={3}
+                    maxLength={35}
                   />
                 </div>
               </div>
