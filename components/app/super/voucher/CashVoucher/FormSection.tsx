@@ -21,6 +21,14 @@ function SectionCard({ title, children, icon, className = "" }: { title: string;
   );
 }
 
+// ─── Helper: format amount for display ───────────────────────────────────────
+function formatAmountDisplay(amount: string): string {
+    if (!amount) return "₱0.00";
+    const n = parseFloat(amount.replace(/,/g, ""));
+    if (isNaN(n)) return "₱0.00";
+    return `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 interface FormSectionProps {
   formData: PrintableData;
   onInputChange: (field: keyof PrintableData, value: string) => void;
@@ -221,6 +229,8 @@ export default function FormSection({
                         onInputChange("paidTo", val);
                         setShowSuggestions(true);
                       }}
+                      min={2}
+                      maxLength={35}
                       onFocus={() => setShowSuggestions(true)}
                       onBlur={() => { setTimeout(() => setShowSuggestions(false), 200); }}
                       id="paidTo"
@@ -364,14 +374,44 @@ export default function FormSection({
                     <input
                       type="text"
                       inputMode="decimal"
-                      value={formData.amount ?? ""}
+                      value={
+                        formData.amount
+                          ? Number(formData.amount.replace(/,/g, "")).toLocaleString("en-PH", {
+                              maximumFractionDigits: 2,
+                            })
+                          : ""
+                      }
                       onChange={(e) => {
-                        if (errors.amount && e.target.value.trim()) setErrors(prev => { const nv = { ...prev }; delete nv.amount; return nv; });
-                        const val = e.target.value.replace(/[^0-9.]/g, "");
-                        onInputChange("amount", val);
+                        const raw = e.target.value.replace(/[^0-9.]/g, "");
+                        const num = parseFloat(raw);
+
+                        if (errors.amount && e.target.value.trim()) {
+                          setErrors((prev) => {
+                            const nv = { ...prev };
+                            delete nv.amount;
+                            return nv;
+                          });
+                        }
+
+                        // validation
+                        if (num === 0) {
+                          setErrors((prev) => ({ ...prev, amount: "Amount cannot be 0" }));
+                          return;
+                        }
+
+                        if (num > 10000000) {
+                          setErrors((prev) => ({ ...prev, amount: "Amount cannot exceed 10,000,000" }));
+                          return;
+                        }
+
+                        onInputChange("amount", raw);
                       }}
                       id="amount"
-                      className={`${amountFieldClass} ${touched.amount && errors.amount ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+                      className={`${amountFieldClass} ${
+                        touched.amount && errors.amount
+                          ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                          : ""
+                      }`}
                       placeholder="0.00"
                     />
                   </div>
@@ -397,6 +437,8 @@ export default function FormSection({
                     value={formData.projectDetails ?? ""}
                     onChange={(e) => { onInputChange("projectDetails", e.target.value); }}
                     id="projectDetails"
+                    minLength={3}
+                    maxLength={50}
                     className={fieldClass}
                     placeholder="Project title or details"
                   />
@@ -619,7 +661,7 @@ export default function FormSection({
 
         </div>
 
-        <div className="pt-4 w-full">
+        <div className="pt-4 w-full" >
           <DownloadButton formData={formData} onValidate={validateRequired} onSave={saveVoucherToDatabase} onSuccess={onSuccessClear} />
         </div>
 

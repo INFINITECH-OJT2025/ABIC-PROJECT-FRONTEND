@@ -34,6 +34,7 @@ import AppHeader from "@/components/app/AppHeader";
 import SharedToolbar from "@/components/app/SharedToolbar";
 import SummaryBar, { StatPill } from "@/components/app/SummaryBar";
 import { superAdminNav, accountantNav } from "@/lib/navigation";
+import InfoTooltip from "@/components/app/InfoTooltip";
 
 const ACCENT = "#7a0f1f";
 
@@ -235,6 +236,8 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
                 handleChange("paidTo", val);
                 setShowSuggestions(true);
               }}
+              minLength={3}
+              maxLength={35}
               onFocus={() => setShowSuggestions(true)}
               onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
               id="paidTo"
@@ -300,13 +303,45 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
             <input
               type="text"
               inputMode="decimal"
-              value={formData.amount ?? ""}
+              value={
+                formData.amount
+                  ? Number(formData.amount.replace(/,/g, "")).toLocaleString("en-PH", {
+                      maximumFractionDigits: 2,
+                    })
+                  : ""
+              }
               onChange={(e) => {
-                const val = e.target.value.replace(/[^0-9.]/g, "");
-                handleChange("amount", val);
+                const raw = e.target.value.replace(/[^0-9.]/g, "");
+                const num = parseFloat(raw);
+
+                // remove existing error when typing
+                if (errors.amount && e.target.value.trim()) {
+                  setErrors((prev) => {
+                    const nv = { ...prev };
+                    delete nv.amount;
+                    return nv;
+                  });
+                }
+
+                // validation
+                if (num === 0) {
+                  setErrors((prev) => ({ ...prev, amount: "Amount cannot be 0" }));
+                  return;
+                }
+
+                if (num > 10000000) {
+                  setErrors((prev) => ({ ...prev, amount: "Amount cannot exceed 10,000,000" }));
+                  return;
+                }
+
+                handleChange("amount", raw);
               }}
               id="amount"
-              className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.amount && errors.amount ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+              className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${
+                touched.amount && errors.amount
+                  ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                  : ""
+              }`}
             />
             {touched.amount && errors.amount && (
               <FormTooltipError message={errors.amount} onClose={() => setErrors(prev => { const nv = { ...prev }; delete nv.amount; return nv; })} />
@@ -322,6 +357,8 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
               type="text"
               value={formData.projectDetails ?? ""}
               onChange={(e) => handleChange("projectDetails", e.target.value)}
+              minLength={3}
+              maxLength={45}
               id="projectDetails"
               className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.projectDetails && errors.projectDetails ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
             />
@@ -419,6 +456,8 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
               type="text"
               value={formData.checkNo ?? ""}
               onChange={(e) => handleChange("checkNo", e.target.value)}
+              minLength={3}
+              maxLength={15}
               id="checkNo"
               className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.checkNo && errors.checkNo ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
             />
@@ -432,6 +471,8 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
               type="text"
               value={formData.accountName ?? ""}
               onChange={(e) => handleChange("accountName", e.target.value)}
+              minLength={3}
+              maxLength={25}
               id="accountName"
               className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.accountName && errors.accountName ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
             />
@@ -445,6 +486,8 @@ function ChequeEditForm({ initialData, onSave, onCancel, isSaving }: ChequeEditF
               type="text"
               value={formData.accountNumber ?? ""}
               onChange={(e) => handleChange("accountNumber", e.target.value)}
+              minLength={3}
+              maxLength={15}
               id="accountNumber"
               className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 h-10 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#7a0f1f]/15 focus:border-[#7a0f1f] ${touched.accountNumber && errors.accountNumber ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
             />
@@ -1106,7 +1149,11 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
       key: "paid_to",
       label: "Paid To",
       sortable: true,
-      renderCell: (v) => <span className="max-w-[320px] truncate block">{v.paid_to || "-"}</span>,
+      renderCell: (v) => (
+        <InfoTooltip text={v.paid_to && v.paid_to.length > 30 ? v.paid_to : undefined} side="top" maxWidth={400}>
+          <span className="max-w-[320px] truncate block cursor-default">{v.paid_to || "-"}</span>
+        </InfoTooltip>
+      ),
     },
     {
       key: "check_no",
@@ -1190,29 +1237,36 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
           aria-hidden="true"
         />
         <div
-          className="fixed top-0 right-0 h-full w-[1200px] max-w-full bg-white shadow-2xl z-50 transform transition-all duration-300 ease-in-out"
+          className={`fixed top-0 right-0 h-full max-w-full bg-white shadow-2xl z-50 transform transition-all duration-300 ease-in-out ${panelMode === "edit" ? "w-full lg:w-[48rem]" : "w-[1200px]"}`}
           style={{
             animation: isClosing ? "slideOut 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards" : "slideIn 0.4s cubic-bezier(0.32, 0.72, 0, 1)",
             boxShadow: "-8px 0 24px rgba(0,0,0,0.15)",
           }}
         >
           <div className="h-full flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">
-                  {panelMode === "view" ? "Voucher Preview" : "Edit Voucher"}
-                </h2>
-                <p className="text-sm text-gray-500">{selectedVoucher.voucher_no}</p>
+            {/* ── Gradient Header (matching EditTransactionPanel) ── */}
+            <div className="flex-shrink-0 flex items-center justify-between px-5 py-4 bg-gradient-to-r from-[#800020] via-[#A0153E] to-[#C9184A] text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center">
+                  {panelMode === "view" ? <Eye className="w-5 h-5" /> : <Edit2 className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold">
+                    {panelMode === "view" ? "Voucher Preview" : "Edit Voucher"}
+                  </h2>
+                  <p className="text-sm text-white/80 mt-0.5">{selectedVoucher.voucher_no}</p>
+                </div>
               </div>
+
               <div className="flex items-center gap-2">
                 {panelMode === "view" &&
                   (selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
                     <button
                       onClick={() => handleCancelVoucher(selectedVoucher.id)}
-                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-colors bg-red-50 border border-red-200 text-red-700 hover:bg-red-100"
+                      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-semibold transition-colors bg-white text-black"
                       title="Cancel Voucher"
                     >
-                      <Ban className="w-4 h-4" /> Cancel
+                      <Ban className="w-4 h-4 text-red-600" /> Cancel
                     </button>
                   )}
                 {(selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
@@ -1225,8 +1279,7 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
                 {(selectedVoucher.status || "").toLowerCase() !== "cancelled" && (
                   <button
                     onClick={() => setPanelMode(panelMode === "view" ? "edit" : "view")}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-
+                    className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-semibold transition-colors bg-white hover:bg-white text-black"
                   >
                     {panelMode === "view" ? (
                       <>
@@ -1241,10 +1294,10 @@ export default function VoucherChequeVoucherListShared({ role }: { role: "supera
                 )}
                 <button
                   onClick={closePanel}
-                  className="p-2 rounded-xl hover:bg-gray-200 transition-colors"
+                  className="p-2 rounded-md hover:bg-white/20 transition-colors"
                   aria-label="Close"
                 >
-                  <X className="w-5 h-5 text-gray-600" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>

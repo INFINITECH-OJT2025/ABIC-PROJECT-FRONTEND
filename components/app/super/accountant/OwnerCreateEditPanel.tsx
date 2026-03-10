@@ -398,7 +398,9 @@ export default function OwnerCreateEditPanel({
                                 >
                                     <option value="CLIENT">Client</option>
                                     <option value="COMPANY">Company</option>
-                                    <option value="MAIN">Main</option>
+                                    {(!isEdit || owner?.owner_type === "MAIN") && (
+                                        <option value="MAIN">Main</option>
+                                    )}
                                     {isEdit && owner?.owner_type === "SYSTEM" && (
                                         <option value="SYSTEM">System</option>
                                     )}

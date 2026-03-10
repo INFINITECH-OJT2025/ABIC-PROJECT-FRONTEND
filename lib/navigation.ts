@@ -89,6 +89,7 @@ export const superAdminNav: NavEntry[] = [
         type: "group", label: "TRANSACTIONS", icon: FileText, items: [
             { label: "New Transaction", href: "/super/accountant/transactions", icon: Plus },
             { label: "Transactions Receipt", href: "/super/accountant/transaction-receipt", icon: Receipt },
+            { label: "Transaction Sheet", href: "/super/accountant/transaction-sheet", icon: FileText },
         ],
     },
     {
@@ -155,6 +156,7 @@ export const accountantNav: NavEntry[] = [
         type: "group", label: "TRANSACTIONS", icon: FileText, items: [
             { label: "New Transaction", href: "/accountant/transactions", icon: Plus },
             { label: "Transactions Receipt", href: "/accountant/transaction-receipt", icon: Receipt },
+            { label: "Transaction Sheet", href: "/accountant/transaction-sheet", icon: FileText },
         ],
     },
     {
@@ -228,6 +230,7 @@ export const viewerNav: NavEntry[] = [
         type: "group", label: "TRANSACTIONS", icon: FileText, items: [
             { label: "New Transaction", href: "/viewer/accountant/transactions", icon: Plus },
             { label: "Transactions Receipt", href: "/viewer/accountant/transaction-receipt", icon: Receipt },
+            { label: "Transaction Sheet", href: "/viewer/accountant/transaction-sheet", icon: FileText },
             { label: "Accountant Log", href: "/viewer/accountant/activity-log", icon: ScrollText },
         ],
     },
