@@ -656,6 +656,7 @@ function InlineParticularsCell({
                         type="text"
                         value={value}
                         onChange={(e) => setValue(e.target.value)}
+                        maxLength={35}
                         onBlur={(e) => {
                             // Only commit on blur if we click outside the whole cell container
                             if (!e.currentTarget.parentElement?.parentElement?.contains(e.relatedTarget as Node)) {
@@ -766,7 +767,7 @@ function InlineAmountCell({
 
     function handleSave() {
         const parsed = parseFloat(editAmount);
-        if (isNaN(parsed) || parsed <= 0) return;
+        if (isNaN(parsed) || parsed <= 0 || parsed > 10000000) return;
         if (parsed === amount) return; // No change
         
         setSaving(true);
@@ -777,8 +778,9 @@ function InlineAmountCell({
         <div className="flex items-center gap-1 w-full max-w-[130px] ml-auto">
             <input
                 type="number"
-                step="1.00"
-                min="1.00   "
+                step="0.01"
+                min="0.01"
+                max="10000000"
                 value={editAmount}
                 onChange={(e) => setEditAmount(e.target.value)}
                 disabled={saving}
@@ -790,7 +792,7 @@ function InlineAmountCell({
             <button
                 type="button"
                 onClick={handleSave}
-                disabled={saving || isNaN(parseFloat(editAmount)) || parseFloat(editAmount) <= 0 || parseFloat(editAmount) === amount}
+                disabled={saving || isNaN(parseFloat(editAmount)) || parseFloat(editAmount) <= 0 || parseFloat(editAmount) > 10000000 || parseFloat(editAmount) === amount}
                 className="p-1.5 rounded-md bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50 transition-colors shrink-0"
             >
                 {saving ? <div className="w-3.5 h-3.5 border-2 border-green-700 border-t-transparent rounded-full animate-spin" /> : <Check className="w-3.5 h-3.5" />}
@@ -1067,9 +1069,20 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
     const [editingTxId, setEditingTxId] = useState<number | null>(null);
     const [editingField, setEditingField] = useState<"date" | null>(null);
 
+    // ── Inline Add Transaction State ──────────────────────────────────────────
+    const [isAddingNew, setIsAddingNew] = useState(false);
+    const [newTxRow, setNewTxRow] = useState<LedgerEntry | null>(null);
+    const [newTxFile, setNewTxFile] = useState<File | null>(null);
+    const [newTxInstFile, setNewTxInstFile] = useState<File | null>(null);
+    const [newTxSaving, setNewTxSaving] = useState(false);
+
     // All owners for inline owner dropdown (includes CLIENT, COMPANY, MAIN)
     const [allOwners, setAllOwners] = useState<AllOwner[]>([]);
     const [allOwnersLoading, setAllOwnersLoading] = useState(false);
+
+    // Units for the new transaction row
+    const [newTxUnits, setNewTxUnits] = useState<{ id: number; name: string }[]>([]);
+    const [newTxUnitsLoading, setNewTxUnitsLoading] = useState(false);
 
     const { showToast } = useAppToast();
 
@@ -1104,7 +1117,7 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
     // ── Fetch all owners for inline owner edit dropdown ────────────────────────
 
     useEffect(() => {
-        if (!editingTxId) return; // Only fetch when editing
+        if (!editingTxId && !isAddingNew) return; // Only fetch when editing or adding
         if (allOwners.length > 0) return; // Already fetched
         setAllOwnersLoading(true);
         fetch("/api/accountant/maintenance/owners?per_page=all&status=ACTIVE")
@@ -1121,7 +1134,41 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             })
             .catch((err) => console.error(err))
             .finally(() => setAllOwnersLoading(false));
-    }, [editingTxId, allOwners.length]);
+    }, [editingTxId, isAddingNew, allOwners.length]);
+
+    // ── Fetch units for new transaction row ───────────────────────────────────
+
+    useEffect(() => {
+        if (!isAddingNew || !newTxRow?.otherOwnerId) {
+            setNewTxUnits([]);
+            return;
+        }
+
+        // Only fetch for CLIENT or COMPANY
+        const otherOwner = allOwners.find(o => String(o.id) === String(newTxRow.otherOwnerId));
+        if (!otherOwner || (otherOwner.owner_type !== "CLIENT" && otherOwner.owner_type !== "COMPANY")) {
+            setNewTxUnits([]);
+            return;
+        }
+
+        setNewTxUnitsLoading(true);
+        fetch(`/api/accountant/maintenance/units?owner_id=${newTxRow.otherOwnerId}&per_page=100`)
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.success && data.data) {
+                    const list = Array.isArray(data.data?.data)
+                        ? data.data.data
+                        : Array.isArray(data.data)
+                            ? data.data
+                            : [];
+                    setNewTxUnits(list.map((u: any) => ({ id: u.id, name: u.unit_name })));
+                } else {
+                    setNewTxUnits([]);
+                }
+            })
+            .catch(() => setNewTxUnits([]))
+            .finally(() => setNewTxUnitsLoading(false));
+    }, [isAddingNew, newTxRow?.otherOwnerId, allOwners]);
 
     // ── Fetch ledger entries ──────────────────────────────────────────────────
 
@@ -1313,6 +1360,148 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
     }, [showToast, fetchLedger]);
 
 
+    // ── Handle Inline New Row Creation ────────────────────────────────────────
+
+    const startAddingNewRow = useCallback(() => {
+        if (!selectedOwnerId) {
+            showToast("Warning", "Please select an owner first.", "warning");
+            return;
+        }
+        
+        // Find the selected owner details
+        const ownerDetails = owners.find(o => String(o.id) === String(selectedOwnerId));
+        if (!ownerDetails) return;
+
+        // Initialize empty LedgerEntry for creation mode
+        const d = new Date();
+        const ysd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        
+        setIsAddingNew(true);
+        setNewTxFile(null);
+        setNewTxInstFile(null);
+        setNewTxSaving(false);
+        setNewTxRow({
+            id: -1,
+            transactionId: -1,
+            createdAt: ysd,
+            voucherDate: ysd,
+            isVoucherDate: true,
+            voucherNo: "",
+            otherOwnerId: null,      // For deposit: From whom? For withdrawal: To whom?
+            otherOwnerType: null,
+            otherUnitId: null,
+            transType: "CASH DEPOSIT", 
+            owner: "",               // We don't need text for saving, just the otherOwnerId
+            particulars: "",
+            deposit: 0,
+            withdrawal: 0,
+            outsBalance: 0,
+            transferGroupId: null,
+            voucherAttachmentUrl: null,
+            voucherFileType: null,
+            voucherFileSize: null,
+            instrumentAttachments: [],
+            fundReference: null,
+            personInCharge: null,
+            transMethod: "DEPOSIT", // Default mode
+        });
+    }, [owners, selectedOwnerId, showToast]);
+
+    const handleSubmitNewRow = useCallback(async () => {
+        if (!newTxRow || !selectedOwnerId) return;
+        
+        // 1. Validation
+        if (!newTxRow.voucherDate) { showToast("Validation Error", "Date is required.", "error"); return; }
+        if (!newTxRow.transType) { showToast("Validation Error", "Transaction type is required.", "error"); return; }
+        if (!newTxRow.otherOwnerId) { showToast("Validation Error", "Counterparty Owner is required.", "error"); return; }
+        if (!newTxRow.particulars || newTxRow.particulars.trim() === "") { showToast("Validation Error", "Particulars are required.", "error"); return; }
+        
+        const isDeposit = newTxRow.transMethod === "DEPOSIT";
+        const amt = isDeposit ? newTxRow.deposit : newTxRow.withdrawal;
+        if (amt <= 0 || amt > 10000000) { showToast("Validation Error", "Amount must be between 0.01 and 10,000,000.", "error"); return; }
+
+        if (newTxRow.transMethod === "WITHDRAWAL" && newTxRow.transType === "CHEQUE" && !newTxInstFile) {
+            showToast("Validation Error", "Cheque image is required for cheque withdrawals.", "error"); return;
+        }
+
+        setNewTxSaving(true);
+        try {
+            // 2. Build Payload exactly like TransactionForm.tsx
+            const transactionPayload = {
+                voucher_date: newTxRow.voucherDate,
+                voucher_no: newTxRow.voucherNo || null,
+                trans_type: newTxRow.transType,
+                trans_method: newTxRow.transMethod,
+                amount: amt,
+                particulars: newTxRow.particulars,
+                status: "ACTIVE",
+
+                // Routing IDs
+                // For DEPOSIT:   from is the otherOwner, to is the MAIN
+                // For WITHDRAWAL: from is the MAIN, to is the otherOwner
+                from_owner_id: isDeposit ? newTxRow.otherOwnerId : selectedOwnerId,
+                to_owner_id: isDeposit ? selectedOwnerId : newTxRow.otherOwnerId,
+                
+                // Unit specifics
+                unit_id: newTxRow.otherUnitId,
+                save_to_unit_ledger: !!newTxRow.otherUnitId,
+            };
+
+            const instrumentsPayload: any[] = [];
+            if (newTxInstFile && newTxRow.transType === "CHEQUE") {
+                instrumentsPayload.push({
+                    instrument_type: "CHEQUE",
+                    instrument_no: newTxInstFile.name.replace(/\.[^.]+$/, ""),
+                    amount: amt,
+                    bank_name: null,
+                    date_of_instrument: null,
+                    notes: null
+                });
+            }
+
+            const formData = new FormData();
+            formData.append('transaction', JSON.stringify(transactionPayload));
+            if (instrumentsPayload.length > 0) {
+                formData.append('instruments', JSON.stringify(instrumentsPayload));
+            }
+            if (newTxFile) {
+                formData.append('voucher', newTxFile);
+            }
+            if (newTxInstFile) {
+                formData.append('attachments_files[]', newTxInstFile);
+            }
+
+            // 3. Send Request
+            const endpoint = isDeposit ? '/api/head/accountant/transactions/deposit' : '/api/head/accountant/transactions/withdrawal';
+            const res = await fetch(endpoint, {
+                method: "POST",
+                body: formData, // fetch automatically sets multipart matching boundary
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                showToast("Success", data.message || "Transaction added successfully.", "success");
+                setIsAddingNew(false);
+                setNewTxRow(null);
+                setNewTxFile(null);
+                setNewTxInstFile(null);
+                fetchLedger();
+            } else {
+                // If validation errors are returned, show the first one
+                if (data.errors) {
+                    const firstError = Object.values(data.errors)[0] as string[];
+                    showToast("Validation Error", firstError[0], "error");
+                } else {
+                    showToast("Error", data.message || "Failed to create transaction.", "error");
+                }
+            }
+        } catch (err: any) {
+            showToast("Error", err.message || "An unexpected error occurred.", "error");
+        } finally {
+            setNewTxSaving(false);
+        }
+    }, [newTxRow, selectedOwnerId, newTxFile, newTxInstFile, showToast, fetchLedger]);
+
     // ── Columns ───────────────────────────────────────────────────────────────
 
     const columns = React.useMemo<DataSheetColumn<LedgerEntry>[]>(() => [
@@ -1323,11 +1512,22 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             align: "center",
             width: "52px",
             minWidth: "52px",
-            renderCell: (_row, rowIndex) => (
-                <span className="text-xs font-bold text-gray-400 tabular-nums">
-                    {rowIndex + 1}
-                </span>
-            ),
+            renderCell: (row, rowIndex) => {
+                if (row.id === -1) {
+                    return (
+                        <div className="flex items-center justify-center w-full h-full">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#7B0F2B] text-[10px] font-bold text-white shadow-sm ring-2 ring-white">
+                                +
+                            </span>
+                        </div>
+                    );
+                }
+                return (
+                    <span className="text-xs font-bold text-gray-400 tabular-nums">
+                        {rowIndex + (isAddingNew ? 0 : 1)}
+                    </span>
+                );
+            },
         },
 
         // ── DATE (editable) ──
@@ -1339,6 +1539,16 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             minWidth: "170px",
             sortable: true,
             renderCell: (row) => {
+                if (row.id === -1) {
+                    return (
+                        <input
+                            type="date"
+                            value={newTxRow?.voucherDate || ""}
+                            onChange={(e) => setNewTxRow(prev => prev ? { ...prev, voucherDate: e.target.value } : null)}
+                            className="w-full h-7 text-xs rounded border border-[#7a0f1f]/60 bg-white px-1.5 focus:outline-none focus:ring-2 focus:ring-[#7a0f1f]/30 font-medium text-gray-800"
+                        />
+                    );
+                }
                 const isEditing = editingTxId === row.transactionId;
                 return (
                     <InlineDateCell
@@ -1360,13 +1570,44 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             minWidth: "200px",
             maxWidth: "200px",
             sortable: true,
-            renderCell: (row) => (
-                <InlineVoucherCell
-                    row={row}
-                    onRefresh={fetchLedger}
-                    forceEdit={editingTxId === row.transactionId}
-                />
-            ),
+            renderCell: (row) => {
+                if (row.id === -1) {
+                    return (
+                        <div className="flex items-center gap-2">
+                            <label className="flex items-center justify-center h-7 px-3 text-xs font-bold text-gray-700 bg-gray-100 border rounded cursor-pointer hover:bg-gray-200 truncate max-w-[120px]">
+                                {newTxFile ? newTxFile.name : "Upload Voucher"}
+                                <input
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        const f = e.target.files?.[0];
+                                        if (f) {
+                                            setNewTxFile(f);
+                                            // Provide filename fallback
+                                            if (!newTxRow?.voucherNo) {
+                                                setNewTxRow(prev => prev ? { ...prev, voucherNo: f.name.replace(/\.[^.]+$/, "") } : null);
+                                            }
+                                        }
+                                    }}
+                                />
+                            </label>
+                            {newTxFile && (
+                                <button type="button" onClick={() => { setNewTxFile(null); setNewTxRow(prev => prev ? { ...prev, voucherNo: "" } : null); }} className="text-red-500 hover:bg-red-50 p-1 rounded">
+                                    <X className="w-3 h-3" />
+                                </button>
+                            )}
+                        </div>
+                    );
+                }
+                return (
+                    <InlineVoucherCell
+                        row={row}
+                        onRefresh={fetchLedger}
+                        forceEdit={editingTxId === row.transactionId}
+                    />
+                );
+            },
         },
 
         // ── TRANS TYPE (editable) ──
@@ -1379,6 +1620,72 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             maxWidth: "170px",
             sortable: true,
             renderCell: (row) => {
+                if (row.id === -1) {
+                    return (
+                        <div className="flex flex-col gap-2 w-full">
+                            <select
+                                value={newTxRow?.transMethod || "DEPOSIT"}
+                                onChange={(e) => {
+                                    const m = e.target.value as "DEPOSIT" | "WITHDRAWAL";
+                                    setNewTxRow(prev => prev ? { 
+                                        ...prev, 
+                                        transMethod: m, 
+                                        transType: m === "DEPOSIT" ? "CASH DEPOSIT" : "CASH",
+                                        deposit: 0, 
+                                        withdrawal: 0 
+                                    } : null);
+                                }}
+                                className="w-full text-xs font-bold rounded bg-gray-100 border-none px-2 h-7 focus:ring-0 text-[#7a0f1f]"
+                            >
+                                <option value="DEPOSIT">DEPOSIT</option>
+                                <option value="WITHDRAWAL">WITHDRAWAL</option>
+                            </select>
+                            <select
+                                value={newTxRow?.transType || ""}
+                                onChange={(e) => setNewTxRow(prev => prev ? { ...prev, transType: e.target.value } : null)}
+                                className="w-full text-xs rounded border border-[#7a0f1f]/60 bg-white px-1.5 h-7 focus:outline-none focus:ring-2 focus:ring-[#7a0f1f]/30"
+                            >
+                                {newTxRow?.transMethod === "DEPOSIT" ? (
+                                    <>
+                                        <option value="CASH DEPOSIT">CASH DEPOSIT</option>
+                                        <option value="BANK TRANSFER">BANK TRANSFER</option>
+                                        <option value="CHEQUE DEPOSIT">CHEQUE DEPOSIT</option>
+                                    </>
+                                ) : (
+                                    <>
+                                        <option value="CASH">CASH</option>
+                                        <option value="CHEQUE">CHEQUE</option>
+                                        <option value="WIRE TRANSFER">WIRE TRANSFER</option>
+                                    </>
+                                )}
+                            </select>
+                            {newTxRow?.transMethod === "WITHDRAWAL" && newTxRow?.transType === "CHEQUE" && (
+                                <div className="flex items-center gap-1 mt-1">
+                                    <label className="flex items-center justify-between w-full h-7 px-2 text-[10px] font-bold text-gray-700 bg-gray-50 border border-gray-200 rounded cursor-pointer hover:bg-gray-100 shrink-0">
+                                        <span className="truncate w-full block max-w-[90px] text-center">
+                                            {newTxInstFile ? newTxInstFile.name : "+ Cheque Img"}
+                                        </span>
+                                        <input
+                                            type="file"
+                                            accept="image/*,.pdf"
+                                            className="hidden"
+                                            onChange={(e) => {
+                                                const f = e.target.files?.[0];
+                                                if (f) setNewTxInstFile(f);
+                                            }}
+                                        />
+                                    </label>
+                                    {newTxInstFile && (
+                                        <button type="button" onClick={() => setNewTxInstFile(null)} className="text-red-500 hover:bg-red-50 p-1 rounded shrink-0">
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    );
+                }
+
                 // Build instrument files for popover (used in both edit and read modes)
                 const files: { name: string; url?: string | null; type?: string | null; size?: number | null }[] =
                     (row.instrumentAttachments ?? []).map((a: any) => ({
@@ -1437,6 +1744,26 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             maxWidth: "200px",
             sortable: true,
             renderCell: (row) => {
+                if (row.id === -1) {
+                    return (
+                        <div className="w-full relative z-50">
+                            <select
+                                value={newTxRow?.otherOwnerId || ""}
+                                onChange={(e) => {
+                                    const val = e.target.value ? Number(e.target.value) : null;
+                                    setNewTxRow(prev => prev ? { ...prev, otherOwnerId: val } : null);
+                                }}
+                                disabled={allOwnersLoading}
+                                className="w-full text-xs font-semibold rounded border border-[#7a0f1f]/60 bg-white px-1.5 h-7 focus:outline-none focus:ring-2 focus:ring-[#7a0f1f]/30 truncate"
+                            >
+                                <option value="">-- Select Owner --</option>
+                                {allOwners.filter(o => o.owner_type !== "SYSTEM" && String(o.id) !== String(selectedOwnerId)).map(o => (
+                                    <option key={o.id} value={o.id}>{o.name} ({o.owner_type})</option>
+                                ))}
+                            </select>
+                        </div>
+                    );
+                }
                 // Always use InlineOwnerCell — it handles both read and edit modes
                 return (
                     <InlineOwnerCell
@@ -1461,14 +1788,62 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             minWidth: "500px",
             maxWidth: "500px",
             sortable: true,
-            renderCell: (row) => (
-                <InlineParticularsCell
-                    row={row}
-                    onSave={handleSaveParticulars}
-                    forceEdit={editingTxId === row.transactionId}
-                    onEditDone={() => { /* whole row editing stays on */ }}
-                />
-            ),
+            renderCell: (row) => {
+                if (row.id === -1) {
+                    return (
+                        <div className="flex flex-col gap-2 w-full">
+                            <input
+                                type="text"
+                                placeholder="Enter particulars (max 35 chars)"
+                                maxLength={35}
+                                value={newTxRow?.particulars || ""}
+                                onChange={(e) => setNewTxRow(prev => prev ? { ...prev, particulars: e.target.value } : null)}
+                                className="w-full text-xs rounded border border-[#7a0f1f]/60 bg-white px-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#7a0f1f]/30 font-medium text-gray-800"
+                            />
+                            {newTxUnits.length > 0 && (
+                                <div className="flex items-center gap-4 px-1">
+                                    <select
+                                        value={newTxRow?.otherUnitId || ""}
+                                        onChange={(e) => {
+                                            const val = e.target.value ? Number(e.target.value) : null;
+                                            setNewTxRow(prev => prev ? { ...prev, otherUnitId: val } : null);
+                                        }}
+                                        className="h-6 text-[10px] rounded border border-gray-300 bg-gray-50 px-1 text-gray-700 outline-none focus:border-[#7a0f1f] max-w-[150px]"
+                                    >
+                                        <option value="">-- Optional Unit --</option>
+                                        {newTxUnits.map((u) => (
+                                            <option key={u.id} value={u.id}>{u.name}</option>
+                                        ))}
+                                    </select>
+                                    
+                                    {newTxRow?.otherUnitId && (
+                                        <label className="flex items-center gap-1.5 cursor-pointer group">
+                                            <input
+                                                type="checkbox"
+                                                className="w-3.5 h-3.5 rounded border-gray-300 text-[#7a0f1f] focus:ring-[#7a0f1f]/30"
+                                                checked={true} // For new row, if unit is selected, we usually want to save to ledger
+                                                readOnly
+                                            />
+                                            <span className="text-[10px] font-bold text-gray-500 group-hover:text-[#7a0f1f] transition-colors">
+                                                Save to Ledger
+                                            </span>
+                                        </label>
+                                    )}
+                                </div>
+                            )}
+                            {newTxUnitsLoading && <span className="text-[10px] text-gray-400 italic px-1">Loading units...</span>}
+                        </div>
+                    );
+                }
+                return (
+                    <InlineParticularsCell
+                        row={row}
+                        onSave={handleSaveParticulars}
+                        forceEdit={editingTxId === row.transactionId}
+                        onEditDone={() => { /* whole row editing stays on */ }}
+                    />
+                );
+            },
         },
 
         // ── DEPOSIT ──
@@ -1480,14 +1855,29 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             minWidth: "140px",
             maxWidth: "140px",
             sortable: true,
-            renderCell: (row) => (
-                <InlineAmountCell
-                    row={row}
-                    type="DEPOSIT"
-                    onSave={handleSaveAmount}
-                    forceEdit={editingTxId === row.transactionId}
-                />
-            ),
+            renderCell: (row) => {
+                if (row.id === -1) {
+                    if (newTxRow?.transMethod !== "DEPOSIT") return <span className="text-gray-300">—</span>;
+                    return (
+                        <input
+                            type="number"
+                            min="0.01" step="0.01" max="10000000"
+                            value={newTxRow?.deposit || ""}
+                            onChange={(e) => setNewTxRow(prev => prev ? { ...prev, deposit: parseFloat(e.target.value) || 0 } : null)}
+                            className="w-full text-right h-7 text-xs rounded border border-[#7a0f1f]/60 bg-white px-1.5 focus:outline-none focus:ring-2 focus:ring-[#7a0f1f]/30 font-bold text-[#45474B]"
+                            placeholder="0.00"
+                        />
+                    );
+                }
+                return (
+                    <InlineAmountCell
+                        row={row}
+                        type="DEPOSIT"
+                        onSave={handleSaveAmount}
+                        forceEdit={editingTxId === row.transactionId}
+                    />
+                );
+            },
         },
 
         // ── WITHDRAWAL ──
@@ -1499,14 +1889,29 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             minWidth: "140px",
             maxWidth: "140px",
             sortable: true,
-            renderCell: (row) => (
-                <InlineAmountCell
-                    row={row}
-                    type="WITHDRAWAL"
-                    onSave={handleSaveAmount}
-                    forceEdit={editingTxId === row.transactionId}
-                />
-            ),
+            renderCell: (row) => {
+                if (row.id === -1) {
+                    if (newTxRow?.transMethod !== "WITHDRAWAL") return <span className="text-gray-300">—</span>;
+                    return (
+                        <input
+                            type="number"
+                            min="0.01" step="0.01" max="10000000"
+                            value={newTxRow?.withdrawal || ""}
+                            onChange={(e) => setNewTxRow(prev => prev ? { ...prev, withdrawal: parseFloat(e.target.value) || 0 } : null)}
+                            className="w-full text-right h-7 text-xs rounded border border-[#7a0f1f]/60 bg-white px-1.5 focus:outline-none focus:ring-2 focus:ring-[#7a0f1f]/30 font-bold text-[#7a0f1f]"
+                            placeholder="0.00"
+                        />
+                    );
+                }
+                return (
+                    <InlineAmountCell
+                        row={row}
+                        type="WITHDRAWAL"
+                        onSave={handleSaveAmount}
+                        forceEdit={editingTxId === row.transactionId}
+                    />
+                );
+            },
         },
 
         // ── OUTS. BALANCE ──
@@ -1518,11 +1923,14 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             minWidth: "140px",
             maxWidth: "140px",
             sortable: true,
-            renderCell: (row) => (
-                <span className="font-bold text-gray-900">
-                    ₱{row.outsBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-                </span>
-            ),
+            renderCell: (row) => {
+                if (row.id === -1) return <span className="text-gray-300 font-bold italic">TBC</span>;
+                return (
+                    <span className="font-bold text-gray-900">
+                        ₱{row.outsBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                    </span>
+                );
+            },
         },
 
         // ── FUND REFERENCES (extra) ──
@@ -1534,7 +1942,7 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             maxWidth: "180px",
             hidden: !showExtraColumns,
             sortable: true,
-            renderCell: (row) => row.fundReference || "-",
+            renderCell: (row) => row.id === -1 ? "-" : row.fundReference || "-",
         },
 
         // ── PERSON IN CHARGE (extra) ──
@@ -1546,7 +1954,7 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             maxWidth: "160px",
             hidden: !showExtraColumns,
             sortable: true,
-            renderCell: (row) => row.personInCharge || "-",
+            renderCell: (row) => row.id === -1 ? "-" : row.personInCharge || "-",
         },
 
         // ── EDIT ACTIONS (shown only for editing row) ──
@@ -1558,6 +1966,29 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             minWidth: "120px",
             maxWidth: "120px",
             renderCell: (row) => {
+                if (row.id === -1) {
+                    return (
+                        <div className="flex flex-col gap-1 w-full mt-1">
+                            <button
+                                type="button"
+                                onClick={handleSubmitNewRow}
+                                disabled={newTxSaving}
+                                className="w-[85px] px-2 py-1 text-xs font-bold rounded-lg bg-[#7a0f1f] text-white hover:bg-[#5f0c18] transition-colors shadow flex items-center justify-center gap-1 disabled:opacity-50"
+                            >
+                                {newTxSaving ? "..." : <><Check className="w-3 h-3" /> Save</>}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setIsAddingNew(false); setNewTxRow(null); }}
+                                disabled={newTxSaving}
+                                className="w-[85px] px-2 py-1 text-xs font-bold rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors border shadow flex items-center justify-center gap-1 disabled:opacity-50"
+                            >
+                                <X className="w-3 h-3" /> Cancel
+                            </button>
+                        </div>
+                    );
+                }
+                
                 if (editingTxId !== row.transactionId) return null;
                 return (
                     <div className="flex items-center gap-1.5">
@@ -1592,21 +2023,27 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
                 );
             },
         },
-    ], [showExtraColumns, role, handleSaveDate, handleSaveTransType, handleSaveParticulars, handleSaveOwner, editingTxId, editingField, allOwners, allOwnersLoading, router, fetchLedger]);
+    ], [showExtraColumns, role, handleSaveDate, handleSaveTransType, handleSaveParticulars, handleSaveOwner, handleSaveAmount, editingTxId, editingField, allOwners, allOwnersLoading, router, fetchLedger, isAddingNew, newTxRow, newTxFile, newTxInstFile, newTxSaving, handleSubmitNewRow, selectedOwnerId, newTxUnits, newTxUnitsLoading]);
 
     // ── Filter + Pagination ───────────────────────────────────────────────────
 
     const filteredEntries = React.useMemo(() => {
-        if (!query.trim()) return entries;
-        const lowerQuery = query.toLowerCase();
-        return entries.filter((e) =>
-            (e.particulars && e.particulars.toLowerCase().includes(lowerQuery)) ||
-            (e.transType && e.transType.toLowerCase().includes(lowerQuery)) ||
-            (e.voucherNo && e.voucherNo.toLowerCase().includes(lowerQuery)) ||
-            (e.owner && e.owner.toLowerCase().includes(lowerQuery)) ||
-            (String(e.id).includes(lowerQuery))
-        );
-    }, [entries, query]);
+        let current = [...entries];
+        if (query.trim()) {
+            const lowerQuery = query.toLowerCase();
+            current = current.filter((e) =>
+                (e.particulars && e.particulars.toLowerCase().includes(lowerQuery)) ||
+                (e.transType && e.transType.toLowerCase().includes(lowerQuery)) ||
+                (e.voucherNo && e.voucherNo.toLowerCase().includes(lowerQuery)) ||
+                (e.owner && e.owner.toLowerCase().includes(lowerQuery)) ||
+                (String(e.id).includes(lowerQuery))
+            );
+        }
+        if (isAddingNew && newTxRow) {
+            current.unshift(newTxRow);
+        }
+        return current;
+    }, [entries, query, isAddingNew, newTxRow]);
 
     // ── Render ────────────────────────────────────────────────────────────────
 
@@ -1638,6 +2075,15 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
                             </p>
                         </div>
                         <div className="flex items-center gap-2">
+                            {role !== "superadmin" && (
+                                <button
+                                    onClick={startAddingNewRow}
+                                    disabled={isAddingNew || entriesLoading || ownersLoading}
+                                    className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold text-white bg-[#7a0f1f] hover:bg-[#5f0c18] rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                    + Add Transaction
+                                </button>
+                            )}
                             {/* Extra columns toggle */}
                             <button
                                 onClick={() => setShowExtraColumns(!showExtraColumns)}
