@@ -12,7 +12,8 @@ import {
     EyeOff,
     Search,
     FileText,
-    ChevronRight
+    ChevronRight,
+    Loader2
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -24,6 +25,8 @@ import SharedToolbar from "@/components/app/SharedToolbar";
 import { DataTableColumn } from "@/components/app/DataTable";
 import UnitBudgetsView, { BudgetSelectDropdown, UnitBudget } from "@/components/app/accountant/UnitBudgetsView";
 import { useAppToast } from "@/components/app/toast/AppToastProvider";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import ConfirmationModal from "@/components/app/ConfirmationModal";
 
 // ─── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -266,7 +269,12 @@ function CompanyLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
     const { showToast } = useAppToast();
 
-    const handleExport = () => {
+    // Export States
+    const [exportingBudgets, setExportingBudgets] = useState(false);
+    const [showExportConfirm, setShowExportConfirm] = useState(false);
+    const [pendingExportType, setPendingExportType] = useState<"main" | "budgets" | null>(null);
+
+    const exportMainLedger = () => {
         if (!entries || entries.length === 0) {
             showToast("Info", "No data to export.", "info");
             return;
@@ -292,20 +300,91 @@ function CompanyLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                 [openingBalance || 0, runningBalanceVal]
             ], { origin: "G1" });
 
-            const exportData = entries.map(entry => ({
-                "DATE": entry.voucherDate,
-                "VOUCHER NO.": entry.voucherNo,
-                "TRANS TYPE": entry.transType,
-                "ACCOUNT SOURCE": entry.owner,
-                "PARTICULARS": entry.particulars,
-                "DEPOSIT": entry.deposit > 0 ? entry.deposit : "",
-                "WITHDRAWAL": entry.withdrawal > 0 ? entry.withdrawal : "",
-                "OUTS. BALANCE": entry.outsBalance,
-                "FUND REFERENCES": entry.fundReference || "-",
-                "PERSON IN CHARGE": entry.personInCharge || "-"
-            }));
+            const baseUrl = window.location.origin;
+            const allRows: any[][] = [];
+            const hyperlinkCells: { r: number; c: number; url: string; text: string }[] = [];
+            const dynMerges: any[] = [];
 
-            XLSX.utils.sheet_add_json(ws, exportData, { origin: "A5", skipHeader: false });
+            // Header row
+            allRows.push(["DATE", "VOUCHER NO.", "TRANS TYPE", "ACCOUNT SOURCE", "PARTICULARS", "DEPOSIT", "WITHDRAWAL", "OUTS. BALANCE", "FUND REFERENCES", "PERSON IN CHARGE"]);
+
+            const rowTxMap: Record<number, number> = {};
+
+            entries.forEach((entry, txIndex) => {
+                const mainRowIdx = allRows.length;
+                rowTxMap[mainRowIdx + 4] = txIndex;
+
+                // Main data row
+                allRows.push([
+                    entry.voucherDate,
+                    entry.voucherNo,
+                    entry.transType,
+                    entry.owner,
+                    entry.particulars,
+                    entry.deposit > 0 ? entry.deposit : "",
+                    entry.withdrawal > 0 ? entry.withdrawal : "",
+                    entry.outsBalance,
+                    entry.fundReference || "-",
+                    entry.personInCharge || "-"
+                ]);
+
+                // Voucher No. hyperlink
+                if (entry.voucherAttachmentUrl) {
+                    const fullUrl = entry.voucherAttachmentUrl.startsWith("http") ? entry.voucherAttachmentUrl : `${baseUrl}${entry.voucherAttachmentUrl}`;
+                    hyperlinkCells.push({ r: mainRowIdx + 4, c: 1, url: fullUrl, text: entry.voucherNo || "—" });
+                }
+
+                // Trans Type — handle instrument attachments
+                const instrumentFiles = entry.instrumentAttachments ?? [];
+                if (instrumentFiles.length > 0) {
+                    const firstFile = instrumentFiles[0];
+                    const firstName = firstFile.instrumentNo ?? firstFile.file_name ?? firstFile.name ?? "—";
+                    const firstUrl = firstFile.attachmentUrl ?? firstFile.file_url ?? firstFile.url ?? null;
+                    allRows[mainRowIdx][2] = firstName;
+                    if (firstUrl) {
+                        const fullUrl = firstUrl.startsWith("http") ? firstUrl : `${baseUrl}${firstUrl}`;
+                        hyperlinkCells.push({ r: mainRowIdx + 4, c: 2, url: fullUrl, text: firstName });
+                    }
+
+                    for (let fi = 1; fi < instrumentFiles.length; fi++) {
+                        const file = instrumentFiles[fi];
+                        const fileName = file.instrumentNo ?? file.file_name ?? file.name ?? "—";
+                        const fileUrl = file.attachmentUrl ?? file.file_url ?? file.url ?? null;
+                        const subRowIdx = allRows.length;
+                        rowTxMap[subRowIdx + 4] = txIndex;
+                        allRows.push(["", "", fileName, "", "", "", "", "", "", ""]);
+                        if (fileUrl) {
+                            const fullUrl = fileUrl.startsWith("http") ? fileUrl : `${baseUrl}${fileUrl}`;
+                            hyperlinkCells.push({ r: subRowIdx + 4, c: 2, url: fullUrl, text: fileName });
+                        }
+                    }
+
+                    if (instrumentFiles.length > 1) {
+                        const startR = mainRowIdx + 4;
+                        const endR = startR + instrumentFiles.length - 1;
+                        [0, 1, 3, 4, 5, 6, 7, 8, 9].forEach(col => {
+                            dynMerges.push({ s: { r: startR, c: col }, e: { r: endR, c: col } });
+                        });
+                    }
+                }
+            });
+
+            XLSX.utils.sheet_add_aoa(ws, allRows, { origin: "A5" });
+
+            hyperlinkCells.forEach(({ r, c, url, text }) => {
+                const cellAddr = XLSX.utils.encode_cell({ r, c });
+                const safeUrl = url.replace(/"/g, '""');
+                const safeText = String(text).replace(/"/g, '""');
+                ws[cellAddr] = {
+                    t: 'str',
+                    f: `HYPERLINK("${safeUrl}","${safeText}")`,
+                    s: {
+                        font: { bold: true, color: { rgb: "0563C1" }, underline: true },
+                        alignment: { vertical: "center" },
+                        protection: { locked: true }
+                    }
+                };
+            });
 
             const headerStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "7A0F1F" } }, alignment: { horizontal: "center", vertical: "center" } };
             const dataStyle = { alignment: { vertical: "center" } };
@@ -321,7 +400,8 @@ function CompanyLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
             ws['!merges'] = [
                 { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
-                { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } }
+                { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
+                ...dynMerges
             ];
 
             const range = XLSX.utils.decode_range(ws['!ref'] || "A1:J10");
@@ -340,11 +420,19 @@ function CompanyLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                     } else if (R === 4) {
                         if (ws[cellAddress].v) ws[cellAddress].s = headerStyle;
                     } else if (R > 4) {
+                        const txIndex = rowTxMap[R];
+                        const isStriped = txIndex !== undefined && txIndex % 2 === 1;
+                        const rowFill = isStriped ? { fill: { fgColor: { rgb: "FFE4E8" } } } : {};
+
+                        if (ws[cellAddress].f && String(ws[cellAddress].f).startsWith("HYPERLINK")) {
+                            if (isStriped) ws[cellAddress].s = { ...ws[cellAddress].s, ...rowFill };
+                            continue;
+                        }
                         if (C >= 5 && C <= 7) {
-                            ws[cellAddress].s = numStyle;
+                            ws[cellAddress].s = { ...numStyle, ...rowFill };
                             if (ws[cellAddress].v !== "" && !isNaN(Number(ws[cellAddress].v))) ws[cellAddress].t = "n";
                         } else {
-                            ws[cellAddress].s = dataStyle;
+                            ws[cellAddress].s = { ...dataStyle, ...rowFill };
                         }
                     }
                 }
@@ -354,6 +442,280 @@ function CompanyLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
             XLSX.utils.book_append_sheet(wb, ws, "Company Ledger");
             XLSX.writeFile(wb, `${sanitizedName}_company_ledger.xlsx`);
         });
+    };
+
+    const exportUnitBudgets = async () => {
+        if (!activeBudget) {
+            showToast("Info", "Please select a Unit Budget to export.", "info");
+            return;
+        }
+
+        if (!activeBudget.units || activeBudget.units.length === 0) {
+            showToast("Info", "No units linked to this budget.", "info");
+            return;
+        }
+
+        setExportingBudgets(true);
+
+        try {
+            const currentOwnerName = owners.find(o => String(o.id) === String(selectedOwnerId))?.name ?? "Company";
+            const sanitizedName = currentOwnerName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            const budgetName = activeBudget.budget_name;
+
+            // Fetch all units' ledgers concurrently
+            const unitPromises = activeBudget.units.map(async (unit) => {
+                const res = await fetch(`/api/accountant/ledger/companies?owner_id=${selectedOwnerId}&unit_id=${unit.id}&sort=oldest`);
+                const data = await res.json();
+                return {
+                    unitName: unit.unit_name,
+                    transactions: data.success ? data.data.transactions : [],
+                    openingBalance: data.success ? data.data.openingBalance : 0
+                };
+            });
+
+            const unitResults = await Promise.all(unitPromises);
+
+            const baseUrl = window.location.origin;
+            const wsData: any[][] = [];
+            const wsMerges: any[] = [];
+            const hyperlinkCells: { r: number; c: number; url: string; text: string }[] = [];
+            const dynMerges: any[] = [];
+            const headerRowIndices: number[] = [];
+            const dataRowIndices: number[] = [];
+            const unitHeaderRowIndices: number[] = [];
+            const infoRowIndices: number[] = [];
+
+            const rowTxMap: Record<number, number> = {};
+
+            // Row 0: Company Title
+            wsData.push(["ABIC REALTY & CONSULTANCY CORPORATION 2025", "", "", "", "", "", "", "", "", ""]);
+            wsMerges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } });
+
+            // Row 1: Subtitle
+            wsData.push([`${currentOwnerName.toUpperCase()} - UNIT BUDGETS (${budgetName.toUpperCase()})`, "", "", "", "", "", "", "", "", ""]);
+            wsMerges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: 4 } });
+
+            // Row 2: RUNNING BUDGET
+            wsData.push([
+                "", "", "", "", "", "",
+                "RUNNING BUDGET", parseFloat(activeBudget.current_balance) || 0,
+                "", ""
+            ]);
+
+            // Row 3: TOTAL RUNNING BALANCE
+            wsData.push([
+                "", "", "", "", "", "",
+                "TOTAL RUNNING BALANCE", activeBudget.total_units_balance !== undefined ? activeBudget.total_units_balance : (parseFloat(activeBudget.current_balance) || 0),
+                "", ""
+            ]);
+
+            wsData.push([]); // Spacer
+
+            unitResults.forEach((ur) => {
+                const runningBal = ur.transactions && ur.transactions.length > 0 ? ur.transactions[ur.transactions.length - 1].outsBalance : ur.openingBalance;
+
+                // Unit Header Row
+                const unitRowIndex = wsData.length;
+                unitHeaderRowIndices.push(unitRowIndex);
+                wsData.push([
+                    ur.unitName, "", "", "", "", "", "", "", "", ""
+                ]);
+                wsMerges.push({ s: { r: unitRowIndex, c: 0 }, e: { r: unitRowIndex, c: 9 } });
+
+                // Info Row
+                const infoRowIndex = wsData.length;
+                infoRowIndices.push(infoRowIndex);
+                wsData.push([
+                    "", "", "", "", "", "",
+                    "OPENING", ur.openingBalance,
+                    "RUNNING", runningBal
+                ]);
+
+                // Columns Header Row
+                const headerRowIndex = wsData.length;
+                headerRowIndices.push(headerRowIndex);
+                wsData.push([
+                    "DATE", "VOUCHER NO.", "TRANS TYPE", "ACCOUNT SOURCE", "PARTICULARS", "DEPOSIT", "WITHDRAWAL", "OUTS. BALANCE", "FUND REFERENCES", "PERSON IN CHARGE"
+                ]);
+
+                // Trans Data
+                if (ur.transactions && ur.transactions.length > 0) {
+                    ur.transactions.forEach((entry: any, txIndex: number) => {
+                        const drIndex = wsData.length;
+                        dataRowIndices.push(drIndex);
+                        rowTxMap[drIndex] = txIndex;
+
+                        wsData.push([
+                            entry.voucherDate,
+                            entry.voucherNo,
+                            entry.transType,
+                            entry.owner,
+                            entry.particulars,
+                            entry.deposit > 0 ? entry.deposit : "",
+                            entry.withdrawal > 0 ? entry.withdrawal : "",
+                            entry.outsBalance,
+                            entry.fundReference || "-",
+                            entry.personInCharge || "-"
+                        ]);
+
+                        if (entry.voucherAttachmentUrl) {
+                            const fullUrl = entry.voucherAttachmentUrl.startsWith("http") ? entry.voucherAttachmentUrl : `${baseUrl}${entry.voucherAttachmentUrl}`;
+                            hyperlinkCells.push({ r: drIndex, c: 1, url: fullUrl, text: entry.voucherNo || "—" });
+                        }
+
+                        const instrumentFiles = entry.instrumentAttachments ?? [];
+                        if (instrumentFiles.length > 0) {
+                            const firstFile = instrumentFiles[0];
+                            const firstName = firstFile.instrumentNo ?? firstFile.file_name ?? firstFile.name ?? "—";
+                            const firstUrl = firstFile.attachmentUrl ?? firstFile.file_url ?? firstFile.url ?? null;
+                            wsData[drIndex][2] = firstName;
+
+                            if (firstUrl) {
+                                const fullUrl = firstUrl.startsWith("http") ? firstUrl : `${baseUrl}${firstUrl}`;
+                                hyperlinkCells.push({ r: drIndex, c: 2, url: fullUrl, text: firstName });
+                            }
+
+                            for (let fi = 1; fi < instrumentFiles.length; fi++) {
+                                const file = instrumentFiles[fi];
+                                const fileName = file.instrumentNo ?? file.file_name ?? file.name ?? "—";
+                                const fileUrl = file.attachmentUrl ?? file.file_url ?? file.url ?? null;
+                                const subRowIdx = wsData.length;
+                                wsData.push(["", "", fileName, "", "", "", "", "", "", ""]);
+                                dataRowIndices.push(subRowIdx);
+                                rowTxMap[subRowIdx] = txIndex;
+                                if (fileUrl) {
+                                    const fullUrl = fileUrl.startsWith("http") ? fileUrl : `${baseUrl}${fileUrl}`;
+                                    hyperlinkCells.push({ r: subRowIdx, c: 2, url: fullUrl, text: fileName });
+                                }
+                            }
+
+                            if (instrumentFiles.length > 1) {
+                                const startR = drIndex;
+                                const endR = startR + instrumentFiles.length - 1;
+                                [0, 1, 3, 4, 5, 6, 7, 8, 9].forEach(col => {
+                                    dynMerges.push({ s: { r: startR, c: col }, e: { r: endR, c: col } });
+                                });
+                            }
+                        }
+                    });
+                } else {
+                    const drIndex = wsData.length;
+                    dataRowIndices.push(drIndex);
+                    wsData.push([
+                        "No records found", "-", "-", "-", "-", "", "", ur.openingBalance, "-", "-"
+                    ]);
+                }
+
+                wsData.push([]); // Spacer row for next unit
+                wsData.push([]);
+                wsData.push([]);
+            });
+
+            const m = await import("xlsx-js-style");
+            const XLSX = m.default || m;
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+            hyperlinkCells.forEach(({ r, c, url, text }) => {
+                const cellAddr = XLSX.utils.encode_cell({ r, c });
+                const safeUrl = url.replace(/"/g, '""');
+                const safeText = String(text).replace(/"/g, '""');
+                ws[cellAddr] = {
+                    t: 'str',
+                    f: `HYPERLINK("${safeUrl}","${safeText}")`,
+                    s: {
+                        font: { bold: true, color: { rgb: "0563C1" }, underline: true },
+                        alignment: { vertical: "center" },
+                        protection: { locked: true }
+                    }
+                };
+            });
+
+            // Define formatting styles
+            const headerStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "7A0F1F" } }, alignment: { horizontal: "center", vertical: "center" } };
+            const unitHeaderStyle = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: "7A0F1F" } }, alignment: { vertical: "center" } }; // Same maroon as table header
+            const numStyle = { alignment: { horizontal: "right", vertical: "center" }, numFmt: "#,##0.00" };
+            const dataStyle = { alignment: { vertical: "center" } };
+
+            const titleStyle = { font: { bold: true, sz: 14, color: { rgb: "7A0F1F" } }, alignment: { horizontal: "center", vertical: "center" } };
+            const subtitleStyle = { font: { bold: true, color: { rgb: "666666" } }, alignment: { horizontal: "center", vertical: "center" } };
+
+            const balanceLabelStyle = { font: { bold: true, sz: 10, color: { rgb: "888888" } }, alignment: { horizontal: "right", vertical: "center" } };
+            const balanceNumStyle = { font: { bold: true, sz: 12, color: { rgb: "7A0F1F" } }, alignment: { horizontal: "right", vertical: "center" }, numFmt: "#,##0.00" };
+            const mainLabelStyle = { font: { bold: true, sz: 11, color: { rgb: "888888" } }, alignment: { horizontal: "right", vertical: "center" } };
+            const mainNumStyle = { font: { bold: true, sz: 14, color: { rgb: "7A0F1F" } }, alignment: { horizontal: "right", vertical: "center" }, numFmt: "#,##0.00" };
+
+            ws['!cols'] = [
+                { wch: 15 }, // A: DATE
+                { wch: 20 }, // B: VOUCHER NO
+                { wch: 25 }, // C: TRANS TYPE
+                { wch: 35 }, // D: ACCOUNT SOURCE
+                { wch: 80 }, // E: PARTICULARS
+                { wch: 18 }, // F: DEPOSIT
+                { wch: 25 }, // G: WITHDRAWAL
+                { wch: 20 }, // H: OUTS BALANCE
+                { wch: 30 }, // I: FUND REFERENCES
+                { wch: 30 }, // J: PERSON IN CHARGE
+            ];
+
+            ws['!merges'] = [...wsMerges, ...dynMerges];
+
+            const range = XLSX.utils.decode_range(ws['!ref'] || "A1:J10");
+
+            for (let R = 0; R <= range.e.r; ++R) {
+                for (let C = 0; C <= range.e.c; ++C) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                    if (!ws[cellAddress]) continue;
+
+                    if (R === 0 && C === 0) ws[cellAddress].s = titleStyle;
+                    else if (R === 1 && C === 0) ws[cellAddress].s = subtitleStyle;
+                    else if (R === 2) {
+                        if (C === 6) ws[cellAddress].s = balanceLabelStyle; // RUNNING BUDGET label
+                        if (C === 7) { ws[cellAddress].s = balanceNumStyle; ws[cellAddress].t = "n"; } // RUNNING BUDGET amount
+                    }
+                    else if (R === 3) {
+                        if (C === 6) ws[cellAddress].s = mainLabelStyle; // TOTAL RUNNING BALANCE label
+                        if (C === 7) { ws[cellAddress].s = mainNumStyle; ws[cellAddress].t = "n"; } // TOTAL RUNNING BALANCE amount
+                    }
+                    else if (unitHeaderRowIndices.includes(R)) {
+                        ws[cellAddress].s = unitHeaderStyle;
+                    }
+                    else if (infoRowIndices.includes(R)) {
+                        if (C === 6 || C === 8) ws[cellAddress].s = balanceLabelStyle;
+                        if (C === 7 || C === 9) { ws[cellAddress].s = balanceNumStyle; ws[cellAddress].t = "n"; }
+                    }
+                    else if (headerRowIndices.includes(R)) {
+                        ws[cellAddress].s = headerStyle;
+                    }
+                    else if (dataRowIndices.includes(R)) {
+                        const txIndex = rowTxMap[R];
+                        const isStriped = txIndex !== undefined && txIndex % 2 === 1;
+                        const rowFill = isStriped ? { fill: { fgColor: { rgb: "FFE4E8" } } } : {};
+
+                        if (ws[cellAddress].f && String(ws[cellAddress].f).startsWith("HYPERLINK")) {
+                            if (isStriped) ws[cellAddress].s = { ...ws[cellAddress].s, ...rowFill };
+                            continue;
+                        }
+
+                        if (C >= 5 && C <= 7) {
+                            ws[cellAddress].s = { ...numStyle, ...rowFill };
+                            if (ws[cellAddress].v !== "" && !isNaN(Number(ws[cellAddress].v))) ws[cellAddress].t = "n";
+                        } else {
+                            ws[cellAddress].s = { ...dataStyle, ...rowFill };
+                        }
+                    }
+                }
+            }
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Unit Budgets");
+            XLSX.writeFile(wb, `${sanitizedName}_unit_budgets_ledger.xlsx`);
+
+        } catch (error) {
+            console.error(error);
+            showToast("Error", "Failed to generate Unit Budgets export.", "error");
+        } finally {
+            setExportingBudgets(false);
+        }
     };
 
     // API Fetches
@@ -681,16 +1043,47 @@ function CompanyLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
     return (
         <div className="min-h-screen bg-gray-50/50 pb-12 font-sans flex flex-col">
+            <ConfirmationModal
+                open={showExportConfirm}
+                title={pendingExportType === "main" ? "Export Main Ledger" : "Export Unit Budgets"}
+                message={pendingExportType === "main"
+                    ? "This will download the main ledger for the selected company as an Excel file. Continue?"
+                    : "This will download the unit budgets ledger for the selected company as an Excel file. Continue?"}
+                confirmLabel="Export"
+                icon={Download}
+                color="#7a0f1f"
+                onCancel={() => { setShowExportConfirm(false); setPendingExportType(null); }}
+                onConfirm={() => {
+                    setShowExportConfirm(false);
+                    if (pendingExportType === "main") exportMainLedger();
+                    else if (pendingExportType === "budgets") exportUnitBudgets();
+                    setPendingExportType(null);
+                }}
+            />
             {/* AppHeader Component */}
             <AppHeader
                 navigation={[]}
                 title="Company Ledger"
                 subtitle="View transaction history and running balances for companies."
                 primaryAction={
-                    <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-white text-[#7a0f1f] rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm">
-                        <Download className="w-4 h-4" />
-                        Export Data
-                    </button>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <button disabled={exportingBudgets} className={`flex items-center gap-2 px-4 py-2 bg-white text-[#7a0f1f] rounded-lg text-sm font-semibold transition-colors shadow-sm outline-none ${exportingBudgets ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}>
+                                {exportingBudgets ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                                {exportingBudgets ? "Exporting..." : "Export Data"}
+                            </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-48 p-2 border border-gray-100 shadow-xl rounded-xl z-50 bg-white" align="end" sideOffset={8}>
+                            <button onClick={() => { setPendingExportType("main"); setShowExportConfirm(true); }} className="w-full text-left px-3 py-2.5 text-sm font-semibold text-gray-700 hover:text-[#7a0f1f] hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2 outline-none">
+                                <FileText className="w-4 h-4 text-gray-400" />
+                                Main Ledger
+                            </button>
+                            <button onClick={() => { setPendingExportType("budgets"); setShowExportConfirm(true); }} className="w-full mt-1 text-left px-3 py-2.5 text-sm font-semibold text-gray-700 hover:text-[#7a0f1f] hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2 outline-none">
+                                <Building2 className="w-4 h-4 text-gray-400" />
+                                Unit Budgets
+                            </button>
+                        </PopoverContent>
+                    </Popover>
                 }
             />
 

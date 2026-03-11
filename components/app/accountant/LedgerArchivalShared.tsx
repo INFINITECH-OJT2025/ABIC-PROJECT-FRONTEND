@@ -25,6 +25,9 @@ import DataTableLedge, { InstrumentFilesPopover, VoucherPreviewButton } from "@/
 import InfoTooltip from "@/components/app/InfoTooltip";
 import SharedToolbar from "@/components/app/SharedToolbar";
 import { DataTableColumn } from "@/components/app/DataTable";
+import { performArchivalExport, exportMultipleOwners } from "./archivalExportHelper";
+import { useExportProgress } from "@/components/app/export/ExportProgressProvider";
+import ConfirmationModal from "@/components/app/ConfirmationModal";
 
 interface LedgerEntry {
     id: number;
@@ -85,7 +88,7 @@ function ArchivalLedgerPage({ role }: { role: "superadmin" | "accountant" | "vie
     const { showToast } = useAppToast();
 
     // Global Owners State
-    const [allOwners, setAllOwners] = useState<{ name: string; type: string }[]>([]);
+    const [allOwners, setAllOwners] = useState<{ id: number; name: string; type: string }[]>([]);
     const [allOwnersLoading, setAllOwnersLoading] = useState(false);
 
     const fetchAllOwners = useCallback(async () => {
@@ -96,6 +99,7 @@ function ArchivalLedgerPage({ role }: { role: "superadmin" | "accountant" | "vie
             if (data.success) {
                 const list = Array.isArray(data.data) ? data.data : (data.data?.data || []);
                 setAllOwners(list.map((o: any) => ({
+                    id: o.id,
                     name: o.name,
                     type: o.owner_type || "Account"
                 })).sort((a: any, b: any) => a.name.localeCompare(b.name)));
@@ -177,22 +181,29 @@ function ArchivalLedgerPage({ role }: { role: "superadmin" | "accountant" | "vie
         return allOwners;
     }, [allOwners]);
 
-    const ownerColumns = useMemo<DataTableColumn<{ name: string; type: string }>[]>(() => [
+    const ownerColumns = useMemo<DataTableColumn<{ id: number; name: string; type: string }>[]>(() => [
         {
             key: "select",
             label: (
                 <div
                     onClick={(e) => {
                         e.stopPropagation();
-                        if (selectedOwners.length === availableOwners.length) setSelectedOwners([]);
-                        else setSelectedOwners(availableOwners.map(o => o.name));
+                        const filtered = availableOwners.filter(o => o.name.toLowerCase().includes(ownerSearch.toLowerCase()));
+                        const allSelected = filtered.every(o => selectedOwners.includes(o.name));
+                        if (allSelected) {
+                            setSelectedOwners(prev => prev.filter(n => !filtered.some(o => o.name === n)));
+                        } else {
+                            setSelectedOwners(prev => [...new Set([...prev, ...filtered.map(o => o.name)])]);
+                        }
                     }}
-                    className={`w-4 h-4 rounded border transition-all flex items-center justify-center cursor-pointer ${selectedOwners.length === availableOwners.length && availableOwners.length > 0
-                        ? 'bg-white border-white text-[#7a0f1f]'
-                        : 'bg-transparent border-white/40 border-dashed'
+                    className={`w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-all ${availableOwners.filter(o => o.name.toLowerCase().includes(ownerSearch.toLowerCase())).every(o => selectedOwners.includes(o.name)) && availableOwners.length > 0
+                            ? 'bg-[#7a0f1f] border-[#7a0f1f]'
+                            : 'bg-transparent border-gray-300'
                         }`}
                 >
-                    {selectedOwners.length === availableOwners.length && availableOwners.length > 0 && <Check className="w-2.5 h-2.5" strokeWidth={4} />}
+                    {availableOwners.filter(o => o.name.toLowerCase().includes(ownerSearch.toLowerCase())).every(o => selectedOwners.includes(o.name)) && availableOwners.length > 0 && (
+                        <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
+                    )}
                 </div>
             ),
             width: "50px",
@@ -238,8 +249,6 @@ function ArchivalLedgerPage({ role }: { role: "superadmin" | "accountant" | "vie
         setIsViewingLedger(false);
         // Clear previous filters
         setSelectedOwners([]);
-        setStartDate("");
-        setEndDate("");
     };
 
     const handleApplyFilters = () => {
@@ -502,6 +511,56 @@ function ArchivalLedgerPage({ role }: { role: "superadmin" | "accountant" | "vie
         to: endIndex
     } : null;
 
+    const { startExport, tickProgress, finishExport, failExport } = useExportProgress();
+
+    const [exportingOwnerData, setExportingOwnerData] = useState(false);
+    const [showExportConfirm, setShowExportConfirm] = useState(false);
+
+    const exportOwnerData = async () => {
+        if (!selectedYear) return;
+        if (selectedOwners.length === 0) {
+            showToast("Info", "Please select at least one account owner.", "info");
+            return;
+        }
+
+        const ownerRecords = selectedOwners
+            .map(name => allOwners.find(o => o.name === name))
+            .filter((o): o is { id: number; name: string; type: string } => !!o);
+
+        if (ownerRecords.length === 0) return;
+
+        setExportingOwnerData(true);
+        const label = ownerRecords.length === 1
+            ? ownerRecords[0].name
+            : `${ownerRecords.length} owners — ${selectedYear}`;
+
+        startExport(label, ownerRecords.length);
+
+        try {
+            const m = await import("xlsx-js-style");
+            const XLSX = m.default || m;
+            const baseUrl = window.location.origin;
+            const yearRecords = foldersByYear.find(f => f.year === selectedYear)?.records || [];
+
+            await exportMultipleOwners(
+                XLSX,
+                ownerRecords,
+                yearRecords,
+                selectedYear,
+                baseUrl,
+                (current, total) => tickProgress(current)
+            );
+
+            finishExport();
+        } catch (error) {
+            console.error(error);
+            failExport("Failed to export. Check console for details.");
+            showToast("Error", "Failed to export data.", "error");
+        } finally {
+            setExportingOwnerData(false);
+        }
+    };
+
     const exportYearData = (year: string) => {
         showToast("Success", `Beginning download for year ${year}`, "success");
         // In a real implementation: Trigger CSV generation
@@ -509,6 +568,18 @@ function ArchivalLedgerPage({ role }: { role: "superadmin" | "accountant" | "vie
 
     return (
         <div className="min-h-screen bg-gray-50/50 pb-12 font-sans flex flex-col overflow-x-hidden">
+            <ConfirmationModal
+                open={showExportConfirm}
+                title={selectedOwners.length > 1 ? `Export ${selectedOwners.length} Owners` : "Export Owner Data"}
+                message={selectedOwners.length > 1
+                    ? `This will generate an Excel file with ${selectedOwners.length} sheets — one per selected owner. Continue?`
+                    : "This will download the archival ledger for the selected owner as an Excel file. Continue?"}
+                confirmLabel="Export"
+                icon={Download}
+                color="#7a0f1f"
+                onCancel={() => setShowExportConfirm(false)}
+                onConfirm={() => { setShowExportConfirm(false); exportOwnerData(); }}
+            />
             <AppHeader
                 navigation={[]}
                 title="Archival Ledger"
@@ -596,7 +667,7 @@ function ArchivalLedgerPage({ role }: { role: "superadmin" | "accountant" | "vie
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                                    <div className="max-w-3xl space-y-6">
                                         {/* ACCOUNT OWNERS SECTION */}
                                         <div className="space-y-6">
                                             <div className="rounded-xl border bg-white shadow-sm relative" style={{ borderColor: BORDER }}>
@@ -623,8 +694,11 @@ function ArchivalLedgerPage({ role }: { role: "superadmin" | "accountant" | "vie
                                                         rows={availableOwners.filter(o => o.name.toLowerCase().includes(ownerSearch.toLowerCase()))}
                                                         loading={allOwnersLoading}
                                                         onRowClick={(row) => {
-                                                            if (selectedOwners.includes(row.name)) setSelectedOwners(selectedOwners.filter(i => i !== row.name));
-                                                            else setSelectedOwners([...selectedOwners, row.name]);
+                                                            setSelectedOwners(prev =>
+                                                                prev.includes(row.name)
+                                                                    ? prev.filter(n => n !== row.name)
+                                                                    : [...prev, row.name]
+                                                            );
                                                         }}
                                                         isRowSelected={(row) => selectedOwners.includes(row.name)}
                                                         emptyTitle="No owners found"
@@ -644,51 +718,18 @@ function ArchivalLedgerPage({ role }: { role: "superadmin" | "accountant" | "vie
                                             </div>
                                         </div>
 
-                                        {/* DATE RANGE SECTION */}
-                                        <div className="space-y-6">
-                                            <div className="rounded-xl border bg-white shadow-sm relative" style={{ borderColor: BORDER }}>
-                                                <div className="flex items-center gap-3 px-6 py-4 border-b bg-gray-50/60 rounded-t-xl" style={{ borderColor: BORDER }}>
-                                                    <span className="text-[#7a0f1f]"><Calendar className="w-4 h-4" /></span>
-                                                    <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Date Range</h3>
-                                                </div>
-                                                <div className="px-6 py-5 space-y-6">
-                                                    <div className="flex flex-col gap-1.5">
-                                                        <label className="text-xs font-black text-gray-500 uppercase tracking-widest">Start Date</label>
-                                                        <div className="relative">
-                                                            <Calendar className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
-                                                            <input
-                                                                type="date"
-                                                                value={startDate}
-                                                                onChange={(e) => setStartDate(e.target.value)}
-                                                                className="w-full h-10 rounded-lg border border-gray-300 text-sm font-bold text-gray-900 bg-white px-3 pl-10 focus:outline-none focus:border-[#7a0f1f] focus:ring-2 focus:ring-[#7a0f1f]/20 transition-all uppercase"
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex flex-col gap-1.5">
-                                                        <label className="text-xs font-black text-gray-500 uppercase tracking-widest">End Date</label>
-                                                        <div className="relative">
-                                                            <Calendar className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
-                                                            <input
-                                                                type="date"
-                                                                value={endDate}
-                                                                onChange={(e) => setEndDate(e.target.value)}
-                                                                className="w-full h-10 rounded-lg border border-gray-300 text-sm font-bold text-gray-900 bg-white px-3 pl-10 focus:outline-none focus:border-[#7a0f1f] focus:ring-2 focus:ring-[#7a0f1f]/20 transition-all uppercase"
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                </div>
-                                            </div>
-
-                                            <button
-                                                onClick={handleApplyFilters}
-                                                className="w-full h-16 bg-[#7a0f1f] text-white rounded-xl text-sm font-black uppercase tracking-[0.2em] shadow-lg hover:bg-[#8e1124] hover:shadow-xl hover:-translate-y-1 transition-all flex items-center justify-center gap-3 group active:scale-95"
-                                            >
-                                                Proceed to Ledger
-                                                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                                            </button>
-                                        </div>
+                                        <button
+                                            onClick={() => setShowExportConfirm(true)}
+                                            disabled={exportingOwnerData}
+                                            className="w-full h-16 bg-[#7a0f1f] text-white rounded-xl text-sm font-black uppercase tracking-[0.2em] shadow-lg hover:bg-[#8e1124] hover:shadow-xl hover:-translate-y-1 transition-all flex items-center justify-center gap-3 group active:scale-95 disabled:opacity-50 disabled:hover:translate-y-0"
+                                        >
+                                            {exportingOwnerData
+                                                ? "Exporting..."
+                                                : selectedOwners.length > 1
+                                                    ? `Export ${selectedOwners.length} Owners`
+                                                    : "Export Data"}
+                                            {!exportingOwnerData && <Download className="w-5 h-5 group-hover:translate-y-1 transition-transform" />}
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -864,75 +905,80 @@ function ArchivalLedgerPage({ role }: { role: "superadmin" | "accountant" | "vie
                 </AnimatePresence>
             </div>
 
-            {actionModalTx && role !== "viewer" && (
-                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-                    <motion.div
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        className="bg-white rounded-2xl shadow-2xl max-w-sm w-full outline-none p-8 relative border border-gray-100"
-                    >
-                        <button
-                            onClick={() => setActionModalTx(null)}
-                            className="absolute top-6 right-6 text-gray-400 hover:text-gray-600 transition-colors"
+            {
+                actionModalTx && role !== "viewer" && (
+                    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="bg-white rounded-2xl shadow-2xl max-w-sm w-full outline-none p-8 relative border border-gray-100"
                         >
-                            <X className="w-6 h-6" />
-                        </button>
-                        <h3 className="text-xl font-black text-[#5f0c18] mb-2 uppercase italic tracking-tight underline underline-offset-4 decoration-[#5f0c18]/20">Transaction Actions</h3>
-                        <p className="text-sm text-gray-500 mb-8 font-medium italic">Manage record #<span className="font-black text-[#5f0c18]">{actionModalTx.transactionId}</span></p>
-                        <div className="flex flex-col gap-4">
                             <button
-                                onClick={async () => {
-                                    const txId = actionModalTx.transactionId;
-                                    setIsFetchingTransaction(true);
-                                    try {
-                                        const res = await fetch(`/api/accountant/transactions/${txId}`);
-                                        const data = await res.json();
-                                        if (data.success) {
-                                            setTransactionToEdit(data.data);
-                                            setShowEditPanel(true);
-                                            setActionModalTx(null);
-                                        } else {
-                                            showToast("Error", data.message || "Failed to load transaction data.", "error");
+                                onClick={() => setActionModalTx(null)}
+                                className="absolute top-6 right-6 text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                            <h3 className="text-xl font-black text-[#5f0c18] mb-2 uppercase italic tracking-tight underline underline-offset-4 decoration-[#5f0c18]/20">Transaction Actions</h3>
+                            <p className="text-sm text-gray-500 mb-8 font-medium italic">Manage record #<span className="font-black text-[#5f0c18]">{actionModalTx?.transactionId}</span></p>
+                            <div className="flex flex-col gap-4">
+                                <button
+                                    onClick={async () => {
+                                        if (!actionModalTx) return;
+                                        const txId = actionModalTx.transactionId;
+                                        setIsFetchingTransaction(true);
+                                        try {
+                                            const res = await fetch(`/api/accountant/transactions/${txId}`);
+                                            const data = await res.json();
+                                            if (data.success) {
+                                                setTransactionToEdit(data.data);
+                                                setShowEditPanel(true);
+                                                setActionModalTx(null);
+                                            } else {
+                                                showToast("Error", data.message || "Failed to load transaction data.", "error");
+                                            }
+                                        } catch (err: any) {
+                                            showToast("Error", err.message || "An error occurred.", "error");
+                                        } finally {
+                                            setIsFetchingTransaction(false);
                                         }
-                                    } catch (err: any) {
-                                        showToast("Error", err.message || "An error occurred.", "error");
-                                    } finally {
-                                        setIsFetchingTransaction(false);
-                                    }
-                                }}
-                                disabled={isFetchingTransaction}
-                                className="w-full py-4 px-4 bg-[#7a0f1f] hover:bg-[#8e1124] text-white font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 shadow-[0_10px_15px_rgba(122,15,31,0.15)] hover:-translate-y-1 active:scale-95 disabled:opacity-50"
-                            >
-                                {isFetchingTransaction ? "Searching..." : "Open Edit Record"}
-                            </button>
-                            <button
-                                onClick={() => {
-                                    router.push(actionModalTx.targetUrl);
-                                    setActionModalTx(null);
-                                }}
-                                disabled={isFetchingTransaction}
-                                className="w-full py-4 px-4 bg-gray-50 hover:bg-gray-100 text-gray-500 font-bold uppercase tracking-widest rounded-xl transition-all flex items-center justify-center"
-                            >
-                                Source Ledger
-                            </button>
-                        </div>
-                    </motion.div>
-                </div>
-            )}
+                                    }}
+                                    disabled={isFetchingTransaction}
+                                    className="w-full py-4 px-4 bg-[#7a0f1f] hover:bg-[#8e1124] text-white font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 shadow-[0_10px_15px_rgba(122,15,31,0.15)] hover:-translate-y-1 active:scale-95 disabled:opacity-50"
+                                >
+                                    {isFetchingTransaction ? "Searching..." : "Open Edit Record"}
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (actionModalTx) router.push(actionModalTx.targetUrl);
+                                        setActionModalTx(null);
+                                    }}
+                                    disabled={isFetchingTransaction}
+                                    className="w-full py-4 px-4 bg-gray-50 hover:bg-gray-100 text-gray-500 font-bold uppercase tracking-widest rounded-xl transition-all flex items-center justify-center"
+                                >
+                                    Source Ledger
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )
+            }
 
-            {showEditPanel && (
-                <EditTransactionPanel
-                    open={showEditPanel}
-                    transaction={transactionToEdit}
-                    onClose={() => {
-                        setShowEditPanel(false);
-                        setTransactionToEdit(null);
-                    }}
-                    onSaved={() => {
-                        fetchLedger();
-                    }}
-                />
-            )}
+            {
+                showEditPanel && (
+                    <EditTransactionPanel
+                        open={showEditPanel}
+                        transaction={transactionToEdit}
+                        onClose={() => {
+                            setShowEditPanel(false);
+                            setTransactionToEdit(null);
+                        }}
+                        onSaved={() => {
+                            fetchLedger();
+                        }}
+                    />
+                )
+            }
         </div>
     );
 }

@@ -27,6 +27,7 @@ import { DataTableColumn } from "@/components/app/DataTable";
 import UnitBudgetsView, { BudgetSelectDropdown, UnitBudget } from "@/components/app/accountant/UnitBudgetsView";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAppToast } from "@/components/app/toast/AppToastProvider";
+import ConfirmationModal from "@/components/app/ConfirmationModal";
 
 // ─── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -269,6 +270,8 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
     const { showToast } = useAppToast();
     const [exportingBudgets, setExportingBudgets] = useState(false);
+    const [showExportConfirm, setShowExportConfirm] = useState(false);
+    const [pendingExportType, setPendingExportType] = useState<"main" | "budgets" | null>(null);
 
     const exportMainLedger = () => {
         if (!entries || entries.length === 0) {
@@ -295,20 +298,91 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                 [openingBalance || 0, runningBalanceVal]
             ], { origin: "G1" });
 
-            const exportData = entries.map(entry => ({
-                "DATE": entry.voucherDate,
-                "VOUCHER NO.": entry.voucherNo,
-                "TRANS TYPE": entry.transType,
-                "ACCOUNT SOURCE": entry.owner,
-                "PARTICULARS": entry.particulars,
-                "DEPOSIT": entry.deposit > 0 ? entry.deposit : "",
-                "WITHDRAWAL": entry.withdrawal > 0 ? entry.withdrawal : "",
-                "OUTS. BALANCE": entry.outsBalance,
-                "FUND REFERENCES": entry.fundReference || "-",
-                "PERSON IN CHARGE": entry.personInCharge || "-"
-            }));
+            const baseUrl = window.location.origin;
+            const allRows: any[][] = [];
+            const hyperlinkCells: { r: number; c: number; url: string; text: string }[] = [];
+            const dynMerges: any[] = [];
 
-            XLSX.utils.sheet_add_json(ws, exportData, { origin: "A5", skipHeader: false });
+            // Header row
+            allRows.push(["DATE", "VOUCHER NO.", "TRANS TYPE", "ACCOUNT SOURCE", "PARTICULARS", "DEPOSIT", "WITHDRAWAL", "OUTS. BALANCE", "FUND REFERENCES", "PERSON IN CHARGE"]);
+
+            const rowTxMap: Record<number, number> = {};
+
+            entries.forEach((entry, txIndex) => {
+                const mainRowIdx = allRows.length;
+                rowTxMap[mainRowIdx + 4] = txIndex;
+
+                // Main data row
+                allRows.push([
+                    entry.voucherDate,
+                    entry.voucherNo,
+                    entry.transType,
+                    entry.owner,
+                    entry.particulars,
+                    entry.deposit > 0 ? entry.deposit : "",
+                    entry.withdrawal > 0 ? entry.withdrawal : "",
+                    entry.outsBalance,
+                    entry.fundReference || "-",
+                    entry.personInCharge || "-"
+                ]);
+
+                // Voucher No. hyperlink
+                if (entry.voucherAttachmentUrl) {
+                    const fullUrl = entry.voucherAttachmentUrl.startsWith("http") ? entry.voucherAttachmentUrl : `${baseUrl}${entry.voucherAttachmentUrl}`;
+                    hyperlinkCells.push({ r: mainRowIdx + 4, c: 1, url: fullUrl, text: entry.voucherNo || "—" });
+                }
+
+                // Trans Type — handle instrument attachments
+                const instrumentFiles = entry.instrumentAttachments ?? [];
+                if (instrumentFiles.length > 0) {
+                    const firstFile = instrumentFiles[0];
+                    const firstName = firstFile.instrumentNo ?? firstFile.file_name ?? firstFile.name ?? "—";
+                    const firstUrl = firstFile.attachmentUrl ?? firstFile.file_url ?? firstFile.url ?? null;
+                    allRows[mainRowIdx][2] = firstName;
+                    if (firstUrl) {
+                        const fullUrl = firstUrl.startsWith("http") ? firstUrl : `${baseUrl}${firstUrl}`;
+                        hyperlinkCells.push({ r: mainRowIdx + 4, c: 2, url: fullUrl, text: firstName });
+                    }
+
+                    for (let fi = 1; fi < instrumentFiles.length; fi++) {
+                        const file = instrumentFiles[fi];
+                        const fileName = file.instrumentNo ?? file.file_name ?? file.name ?? "—";
+                        const fileUrl = file.attachmentUrl ?? file.file_url ?? file.url ?? null;
+                        const subRowIdx = allRows.length;
+                        rowTxMap[subRowIdx + 4] = txIndex;
+                        allRows.push(["", "", fileName, "", "", "", "", "", "", ""]);
+                        if (fileUrl) {
+                            const fullUrl = fileUrl.startsWith("http") ? fileUrl : `${baseUrl}${fileUrl}`;
+                            hyperlinkCells.push({ r: subRowIdx + 4, c: 2, url: fullUrl, text: fileName });
+                        }
+                    }
+
+                    if (instrumentFiles.length > 1) {
+                        const startR = mainRowIdx + 4;
+                        const endR = startR + instrumentFiles.length - 1;
+                        [0, 1, 3, 4, 5, 6, 7, 8, 9].forEach(col => {
+                            dynMerges.push({ s: { r: startR, c: col }, e: { r: endR, c: col } });
+                        });
+                    }
+                }
+            });
+
+            XLSX.utils.sheet_add_aoa(ws, allRows, { origin: "A5" });
+
+            hyperlinkCells.forEach(({ r, c, url, text }) => {
+                const cellAddr = XLSX.utils.encode_cell({ r, c });
+                const safeUrl = url.replace(/"/g, '""');
+                const safeText = String(text).replace(/"/g, '""');
+                ws[cellAddr] = {
+                    t: 'str',
+                    f: `HYPERLINK("${safeUrl}","${safeText}")`,
+                    s: {
+                        font: { bold: true, color: { rgb: "0563C1" }, underline: true },
+                        alignment: { vertical: "center" },
+                        protection: { locked: true }
+                    }
+                };
+            });
 
             // Define styling
             const headerStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "7A0F1F" } }, alignment: { horizontal: "center", vertical: "center" } };
@@ -325,7 +399,8 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
             ws['!merges'] = [
                 { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
-                { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } }
+                { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
+                ...dynMerges
             ];
 
             const range = XLSX.utils.decode_range(ws['!ref'] || "A1:J10");
@@ -344,11 +419,20 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                     } else if (R === 4) {
                         if (ws[cellAddress].v) ws[cellAddress].s = headerStyle;
                     } else if (R > 4) {
+                        const txIndex = rowTxMap[R];
+                        const isStriped = txIndex !== undefined && txIndex % 2 === 1;
+                        const rowFill = isStriped ? { fill: { fgColor: { rgb: "FFE4E8" } } } : {};
+
+                        if (ws[cellAddress].f && String(ws[cellAddress].f).startsWith("HYPERLINK")) {
+                            if (isStriped) ws[cellAddress].s = { ...ws[cellAddress].s, ...rowFill };
+                            continue;
+                        }
+
                         if (C >= 5 && C <= 7) {
-                            ws[cellAddress].s = numStyle;
+                            ws[cellAddress].s = { ...numStyle, ...rowFill };
                             if (ws[cellAddress].v !== "" && !isNaN(Number(ws[cellAddress].v))) ws[cellAddress].t = "n";
                         } else {
-                            ws[cellAddress].s = dataStyle;
+                            ws[cellAddress].s = { ...dataStyle, ...rowFill };
                         }
                     }
                 }
@@ -393,12 +477,17 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
             const unitResults = await Promise.all(unitPromises);
 
+            const baseUrl = window.location.origin;
             const wsData: any[][] = [];
             const wsMerges: any[] = [];
+            const hyperlinkCells: { r: number; c: number; url: string; text: string }[] = [];
+            const dynMerges: any[] = [];
             const headerRowIndices: number[] = [];
             const dataRowIndices: number[] = [];
             const unitHeaderRowIndices: number[] = [];
             const infoRowIndices: number[] = [];
+
+            const rowTxMap: Record<number, number> = {};
 
             // Row 0: Company Title
             wsData.push(["ABIC REALTY & CONSULTANCY CORPORATION 2025", "", "", "", "", "", "", "", "", ""]);
@@ -453,9 +542,11 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
                 // Trans Data
                 if (ur.transactions && ur.transactions.length > 0) {
-                    ur.transactions.forEach((entry: any) => {
+                    ur.transactions.forEach((entry: any, txIndex: number) => {
                         const drIndex = wsData.length;
                         dataRowIndices.push(drIndex);
+                        rowTxMap[drIndex] = txIndex;
+
                         wsData.push([
                             entry.voucherDate,
                             entry.voucherNo,
@@ -468,6 +559,46 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                             entry.fundReference || "-",
                             entry.personInCharge || "-"
                         ]);
+
+                        if (entry.voucherAttachmentUrl) {
+                            const fullUrl = entry.voucherAttachmentUrl.startsWith("http") ? entry.voucherAttachmentUrl : `${baseUrl}${entry.voucherAttachmentUrl}`;
+                            hyperlinkCells.push({ r: drIndex, c: 1, url: fullUrl, text: entry.voucherNo || "—" });
+                        }
+
+                        const instrumentFiles = entry.instrumentAttachments ?? [];
+                        if (instrumentFiles.length > 0) {
+                            const firstFile = instrumentFiles[0];
+                            const firstName = firstFile.instrumentNo ?? firstFile.file_name ?? firstFile.name ?? "—";
+                            const firstUrl = firstFile.attachmentUrl ?? firstFile.file_url ?? firstFile.url ?? null;
+                            wsData[drIndex][2] = firstName;
+
+                            if (firstUrl) {
+                                const fullUrl = firstUrl.startsWith("http") ? firstUrl : `${baseUrl}${firstUrl}`;
+                                hyperlinkCells.push({ r: drIndex, c: 2, url: fullUrl, text: firstName });
+                            }
+
+                            for (let fi = 1; fi < instrumentFiles.length; fi++) {
+                                const file = instrumentFiles[fi];
+                                const fileName = file.instrumentNo ?? file.file_name ?? file.name ?? "—";
+                                const fileUrl = file.attachmentUrl ?? file.file_url ?? file.url ?? null;
+                                const subRowIdx = wsData.length;
+                                wsData.push(["", "", fileName, "", "", "", "", "", "", ""]);
+                                dataRowIndices.push(subRowIdx);
+                                rowTxMap[subRowIdx] = txIndex;
+                                if (fileUrl) {
+                                    const fullUrl = fileUrl.startsWith("http") ? fileUrl : `${baseUrl}${fileUrl}`;
+                                    hyperlinkCells.push({ r: subRowIdx, c: 2, url: fullUrl, text: fileName });
+                                }
+                            }
+
+                            if (instrumentFiles.length > 1) {
+                                const startR = drIndex;
+                                const endR = startR + instrumentFiles.length - 1;
+                                [0, 1, 3, 4, 5, 6, 7, 8, 9].forEach(col => {
+                                    dynMerges.push({ s: { r: startR, c: col }, e: { r: endR, c: col } });
+                                });
+                            }
+                        }
                     });
                 } else {
                     const drIndex = wsData.length;
@@ -485,6 +616,21 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
             const m = await import("xlsx-js-style");
             const XLSX = m.default || m;
             const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+            hyperlinkCells.forEach(({ r, c, url, text }) => {
+                const cellAddr = XLSX.utils.encode_cell({ r, c });
+                const safeUrl = url.replace(/"/g, '""');
+                const safeText = String(text).replace(/"/g, '""');
+                ws[cellAddr] = {
+                    t: 'str',
+                    f: `HYPERLINK("${safeUrl}","${safeText}")`,
+                    s: {
+                        font: { bold: true, color: { rgb: "0563C1" }, underline: true },
+                        alignment: { vertical: "center" },
+                        protection: { locked: true }
+                    }
+                };
+            });
 
             // Define formatting styles
             const headerStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "7A0F1F" } }, alignment: { horizontal: "center", vertical: "center" } };
@@ -513,7 +659,7 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                 { wch: 30 }, // J: PERSON IN CHARGE
             ];
 
-            ws['!merges'] = wsMerges;
+            ws['!merges'] = [...wsMerges, ...dynMerges];
 
             const range = XLSX.utils.decode_range(ws['!ref'] || "A1:J10");
 
@@ -543,11 +689,20 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                         ws[cellAddress].s = headerStyle;
                     }
                     else if (dataRowIndices.includes(R)) {
+                        const txIndex = rowTxMap[R];
+                        const isStriped = txIndex !== undefined && txIndex % 2 === 1;
+                        const rowFill = isStriped ? { fill: { fgColor: { rgb: "FFE4E8" } } } : {};
+
+                        if (ws[cellAddress].f && String(ws[cellAddress].f).startsWith("HYPERLINK")) {
+                            if (isStriped) ws[cellAddress].s = { ...ws[cellAddress].s, ...rowFill };
+                            continue;
+                        }
+
                         if (C >= 5 && C <= 7) {
-                            ws[cellAddress].s = numStyle;
+                            ws[cellAddress].s = { ...numStyle, ...rowFill };
                             if (ws[cellAddress].v !== "" && !isNaN(Number(ws[cellAddress].v))) ws[cellAddress].t = "n";
                         } else {
-                            ws[cellAddress].s = dataStyle;
+                            ws[cellAddress].s = { ...dataStyle, ...rowFill };
                         }
                     }
                 }
@@ -890,6 +1045,23 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
     return (
         <div className="min-h-screen bg-gray-50/50 pb-12 font-sans flex flex-col">
+            <ConfirmationModal
+                open={showExportConfirm}
+                title={pendingExportType === "main" ? "Export Main Ledger" : "Export Unit Budgets"}
+                message={pendingExportType === "main"
+                    ? "This will download the main ledger for the selected client as an Excel file. Continue?"
+                    : "This will download the unit budgets ledger for the selected client as an Excel file. Continue?"}
+                confirmLabel="Export"
+                icon={Download}
+                color="#7a0f1f"
+                onCancel={() => { setShowExportConfirm(false); setPendingExportType(null); }}
+                onConfirm={() => {
+                    setShowExportConfirm(false);
+                    if (pendingExportType === "main") exportMainLedger();
+                    else if (pendingExportType === "budgets") exportUnitBudgets();
+                    setPendingExportType(null);
+                }}
+            />
             {/* AppHeader Component */}
             <AppHeader
                 navigation={[]}
@@ -904,11 +1076,11 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                             </button>
                         </PopoverTrigger>
                         <PopoverContent className="w-48 p-2 border border-gray-100 shadow-xl rounded-xl z-50 bg-white" align="end" sideOffset={8}>
-                            <button onClick={exportMainLedger} className="w-full text-left px-3 py-2.5 text-sm font-semibold text-gray-700 hover:text-[#7a0f1f] hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2 outline-none">
+                            <button onClick={() => { setPendingExportType("main"); setShowExportConfirm(true); }} className="w-full text-left px-3 py-2.5 text-sm font-semibold text-gray-700 hover:text-[#7a0f1f] hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2 outline-none">
                                 <FileText className="w-4 h-4 text-gray-400" />
                                 Main Ledger
                             </button>
-                            <button onClick={exportUnitBudgets} className="w-full mt-1 text-left px-3 py-2.5 text-sm font-semibold text-gray-700 hover:text-[#7a0f1f] hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2 outline-none">
+                            <button onClick={() => { setPendingExportType("budgets"); setShowExportConfirm(true); }} className="w-full mt-1 text-left px-3 py-2.5 text-sm font-semibold text-gray-700 hover:text-[#7a0f1f] hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2 outline-none">
                                 <Building2 className="w-4 h-4 text-gray-400" />
                                 Unit Budgets
                             </button>
