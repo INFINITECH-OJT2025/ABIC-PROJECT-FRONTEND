@@ -3,7 +3,7 @@ import { superAdminNav, accountantNav } from "@/lib/navigation";
 ;
 
 
-import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from "react";
 import {
     Building2,
     ChevronDown,
@@ -256,6 +256,7 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
     const [entries, setEntries] = useState<LedgerEntry[]>([]);
     const [openingBalance, setOpeningBalance] = useState<number>(0);
+    const [runningBalance, setRunningBalance] = useState<number>(0);
     const [entriesLoading, setEntriesLoading] = useState(false);
 
     const [budgets, setBudgets] = useState<UnitBudget[]>([]);
@@ -284,7 +285,7 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
             const currentOwnerName = owners.find(o => String(o.id) === String(selectedOwnerId))?.name ?? "Client";
             const sanitizedName = currentOwnerName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
 
-            const runningBalanceVal = entries.length > 0 ? entries[entries.length - 1].outsBalance : 0;
+            const runningBalanceVal = runningBalance;
             const ws = XLSX.utils.json_to_sheet([]);
 
             XLSX.utils.sheet_add_aoa(ws, [
@@ -308,9 +309,15 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
             const rowTxMap: Record<number, number> = {};
 
+            let exportRunningBalance = openingBalance || 0;
+
             entries.forEach((entry, txIndex) => {
                 const mainRowIdx = allRows.length;
                 rowTxMap[mainRowIdx + 4] = txIndex;
+
+                const depVal = Number(entry.deposit) || 0;
+                const wthVal = Number(entry.withdrawal) || 0;
+                exportRunningBalance += depVal - wthVal;
 
                 // Main data row
                 allRows.push([
@@ -319,9 +326,9 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                     entry.transType,
                     entry.owner,
                     entry.particulars,
-                    entry.deposit > 0 ? entry.deposit : "",
-                    entry.withdrawal > 0 ? entry.withdrawal : "",
-                    entry.outsBalance,
+                    depVal > 0 ? depVal : "",
+                    wthVal > 0 ? wthVal : "",
+                    exportRunningBalance,
                     entry.fundReference || "-",
                     entry.personInCharge || "-"
                 ]);
@@ -542,10 +549,15 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
                 // Trans Data
                 if (ur.transactions && ur.transactions.length > 0) {
+                    let exportRunningBalance = ur.openingBalance || 0;
                     ur.transactions.forEach((entry: any, txIndex: number) => {
                         const drIndex = wsData.length;
                         dataRowIndices.push(drIndex);
                         rowTxMap[drIndex] = txIndex;
+
+                        const depVal = Number(entry.deposit) || 0;
+                        const wthVal = Number(entry.withdrawal) || 0;
+                        exportRunningBalance += depVal - wthVal;
 
                         wsData.push([
                             entry.voucherDate,
@@ -553,9 +565,9 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                             entry.transType,
                             entry.owner,
                             entry.particulars,
-                            entry.deposit > 0 ? entry.deposit : "",
-                            entry.withdrawal > 0 ? entry.withdrawal : "",
-                            entry.outsBalance,
+                            depVal > 0 ? depVal : "",
+                            wthVal > 0 ? wthVal : "",
+                            exportRunningBalance,
                             entry.fundReference || "-",
                             entry.personInCharge || "-"
                         ]);
@@ -780,10 +792,12 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                 if (data.success) {
                     setEntries(data.data.transactions || []);
                     setOpeningBalance(data.data.openingBalance || 0);
+                    setRunningBalance(data.data.runningBalance || 0);
                     setCurrentPage(1); // Reset to page 1 on new fetch
                 } else {
                     setEntries([]);
                     setOpeningBalance(0);
+                    setRunningBalance(0);
                 }
             })
             .catch(err => console.error(err))
@@ -1007,17 +1021,26 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
         }
     ], [showExtraColumns]);
 
-    const filteredEntries = React.useMemo(() => {
-        if (!query.trim()) return entries;
+    // Compute virtual outsBalance for each row from openingBalance + cumulative deposits/withdrawals
+    const entriesWithBalance = useMemo(() => {
+        let balance = 0;
+        return entries.map(e => {
+            balance = balance + e.deposit - e.withdrawal;
+            return { ...e, outsBalance: balance };
+        });
+    }, [entries]);
+
+    const filteredEntries = useMemo(() => {
+        if (!query.trim()) return entriesWithBalance;
         const lowerQuery = query.toLowerCase();
-        return entries.filter(e =>
+        return entriesWithBalance.filter(e =>
             (e.particulars && e.particulars.toLowerCase().includes(lowerQuery)) ||
             (e.transType && e.transType.toLowerCase().includes(lowerQuery)) ||
             (e.voucherNo && e.voucherNo.toLowerCase().includes(lowerQuery)) ||
             (e.owner && e.owner.toLowerCase().includes(lowerQuery)) ||
             (String(e.id).includes(lowerQuery))
         );
-    }, [entries, query]);
+    }, [entriesWithBalance, query]);
 
     // Client-side pagination logic
     const PER_PAGE = 10;
@@ -1229,7 +1252,7 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                                             <Skeleton className="h-full w-24 ml-auto" />
                                         ) : (
                                             <p className="text-lg font-bold text-[#7a0f1f]">
-                                                {entries.length > 0 ? `₱${entries[entries.length - 1].outsBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}` : "₱0.00"}
+                                                {`₱${runningBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
                                             </p>
                                         )}
                                     </div>

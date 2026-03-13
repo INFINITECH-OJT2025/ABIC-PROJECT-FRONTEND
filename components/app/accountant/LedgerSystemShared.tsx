@@ -3,7 +3,7 @@ import { superAdminNav, accountantNav } from "@/lib/navigation";
 ;
 
 
-import React, { useState, useEffect, useCallback, Suspense } from "react";
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from "react";
 import {
     Download,
     Eye,
@@ -59,6 +59,7 @@ function SystemLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
     // Component State
     const [entries, setEntries] = useState<LedgerEntry[]>([]);
     const [openingBalance, setOpeningBalance] = useState<number>(0);
+    const [runningBalance, setRunningBalance] = useState<number>(0);
     const [entriesLoading, setEntriesLoading] = useState(false);
 
     // We can extract ownername from the response if we really want, but it's SYSTEM
@@ -82,7 +83,7 @@ function SystemLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
         import("xlsx-js-style").then((m) => {
             const XLSX = m.default || m;
 
-            const runningBalanceVal = entries.length > 0 ? entries[entries.length - 1].outsBalance : 0;
+            const runningBalanceVal = runningBalance;
             const ws = XLSX.utils.json_to_sheet([]);
 
             XLSX.utils.sheet_add_aoa(ws, [
@@ -106,9 +107,15 @@ function SystemLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
             const rowTxMap: Record<number, number> = {};
 
+            let exportRunningBalance = openingBalance || 0;
+
             entries.forEach((entry, txIndex) => {
                 const mainRowIdx = allRows.length;
                 rowTxMap[mainRowIdx + 4] = txIndex;
+
+                const depVal = Number(entry.deposit) || 0;
+                const wthVal = Number(entry.withdrawal) || 0;
+                exportRunningBalance += depVal - wthVal;
 
                 // Main data row
                 allRows.push([
@@ -117,9 +124,9 @@ function SystemLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                     entry.transType,
                     entry.owner,
                     entry.particulars,
-                    entry.deposit > 0 ? entry.deposit : "",
-                    entry.withdrawal > 0 ? entry.withdrawal : "",
-                    entry.outsBalance,
+                    depVal > 0 ? depVal : "",
+                    wthVal > 0 ? wthVal : "",
+                    exportRunningBalance,
                     entry.fundReference || "-",
                     entry.personInCharge || "-"
                 ]);
@@ -251,6 +258,7 @@ function SystemLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                 if (data.success) {
                     setEntries(data.data.transactions || []);
                     setOpeningBalance(data.data.openingBalance || 0);
+                    setRunningBalance(data.data.runningBalance || 0);
                     if (data.data.owner?.name) {
                         setOwnerName(data.data.owner.name);
                     }
@@ -258,6 +266,7 @@ function SystemLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                 } else {
                     setEntries([]);
                     setOpeningBalance(0);
+                    setRunningBalance(0);
                 }
             })
             .catch(err => console.error(err))
@@ -447,17 +456,26 @@ function SystemLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
         }
     ], [showExtraColumns]);
 
-    const filteredEntries = React.useMemo(() => {
-        if (!query.trim()) return entries;
+    // Compute virtual outsBalance for each row from openingBalance + cumulative deposits/withdrawals
+    const entriesWithBalance = useMemo(() => {
+        let balance = 0;
+        return entries.map(e => {
+            balance = balance + e.deposit - e.withdrawal;
+            return { ...e, outsBalance: balance };
+        });
+    }, [entries]);
+
+    const filteredEntries = useMemo(() => {
+        if (!query.trim()) return entriesWithBalance;
         const lowerQuery = query.toLowerCase();
-        return entries.filter(e =>
+        return entriesWithBalance.filter(e =>
             (e.particulars && e.particulars.toLowerCase().includes(lowerQuery)) ||
             (e.transType && e.transType.toLowerCase().includes(lowerQuery)) ||
             (e.voucherNo && e.voucherNo.toLowerCase().includes(lowerQuery)) ||
             (e.owner && e.owner.toLowerCase().includes(lowerQuery)) ||
             (String(e.id).includes(lowerQuery))
         );
-    }, [entries, query]);
+    }, [entriesWithBalance, query]);
 
     // Client-side pagination logic
     const PER_PAGE = 10;
@@ -561,7 +579,7 @@ function SystemLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                                 <div>
                                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Running Balance</p>
                                     <p className="text-lg font-bold text-[#7a0f1f] mt-0.5">
-                                        {entriesLoading ? "..." : (entries.length > 0 ? `₱${entries[entries.length - 1].outsBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}` : "₱0.00")}
+                                        {entriesLoading ? "..." : `₱${runningBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
                                     </p>
                                 </div>
                             </div>

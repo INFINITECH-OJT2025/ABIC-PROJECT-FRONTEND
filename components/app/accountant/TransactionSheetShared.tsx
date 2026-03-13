@@ -1053,6 +1053,7 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
 
     const [entries, setEntries] = useState<LedgerEntry[]>([]);
     const [openingBalance, setOpeningBalance] = useState<number>(0);
+    const [runningBalance, setRunningBalance] = useState<number>(0);
     const [entriesLoading, setEntriesLoading] = useState(false);
 
     const [query, setQuery] = useState("");
@@ -1182,9 +1183,11 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
                 if (data.success) {
                     setEntries(data.data.transactions || []);
                     setOpeningBalance(data.data.openingBalance || 0);
+                    setRunningBalance(data.data.runningBalance || 0);
                 } else {
                     setEntries([]);
                     setOpeningBalance(0);
+                    setRunningBalance(0);
                 }
             })
             .catch((err) => console.error(err))
@@ -2025,10 +2028,20 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
         },
     ], [showExtraColumns, role, handleSaveDate, handleSaveTransType, handleSaveParticulars, handleSaveOwner, handleSaveAmount, editingTxId, editingField, allOwners, allOwnersLoading, router, fetchLedger, isAddingNew, newTxRow, newTxFile, newTxInstFile, newTxSaving, handleSubmitNewRow, selectedOwnerId, newTxUnits, newTxUnitsLoading]);
 
+    // ── Compute virtual outsBalance for each row ──────────────────────────────
+
+    const entriesWithBalance = useMemo(() => {
+        let balance = 0;
+        return entries.map(e => {
+            balance = balance + e.deposit - e.withdrawal;
+            return { ...e, outsBalance: balance };
+        });
+    }, [entries]);
+
     // ── Filter + Pagination ───────────────────────────────────────────────────
 
-    const filteredEntries = React.useMemo(() => {
-        let current = [...entries];
+    const filteredEntries = useMemo(() => {
+        let current = [...entriesWithBalance];
         if (query.trim()) {
             const lowerQuery = query.toLowerCase();
             current = current.filter((e) =>
@@ -2043,7 +2056,7 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             current.unshift(newTxRow);
         }
         return current;
-    }, [entries, query, isAddingNew, newTxRow]);
+    }, [entriesWithBalance, query, isAddingNew, newTxRow]);
 
     // ── Render ────────────────────────────────────────────────────────────────
 
@@ -2140,9 +2153,7 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
                                     <p className="text-lg font-bold text-[#7a0f1f] mt-0.5">
                                         {entriesLoading
                                             ? "..."
-                                            : entries.length > 0
-                                                ? `₱${entries[entries.length - 1].outsBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
-                                                : "₱0.00"}
+                                            : `₱${runningBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
                                     </p>
                                 </div>
                             </div>
