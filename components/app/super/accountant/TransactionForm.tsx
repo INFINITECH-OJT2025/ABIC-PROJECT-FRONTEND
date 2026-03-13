@@ -1123,7 +1123,6 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
                                             <input
                                                 type="date"
                                                 value={formData.voucher_date}
-                                                max={new Date().toISOString().split("T")[0]}
                                                 onChange={(e) => {
                                                     setFormData((p) => ({ ...p, voucher_date: e.target.value }));
                                                     if (errors.voucher_date && e.target.value)

@@ -177,26 +177,28 @@ export function VoucherPreviewButton({ voucherNo, attachmentUrl, fileType, fileS
 
     return (
         <>
-            <button
-                type="button"
-                onClick={(e) => {
-                    e.stopPropagation()
-                    setPreviewFile({
-                        name: voucherNo,
-                        src: attachmentUrl,
-                        type: fileType ?? undefined,
-                        size: fileSize ?? undefined,
-                    })
-                    setPanelOpen(true)
-                }}
-                className="inline-flex items-center gap-1.5 font-semibold text-[#7a0f1f] cursor-pointer group/voucher"
-                title="Click to view voucher"
-            >
-                <span className="underline decoration-dotted underline-offset-2">{voucherNo}</span>
-                <span className="inline-flex items-center justify-center w-4 h-4 rounded-sm bg-[#7a0f1f]/10 text-[#7a0f1f] group-hover/voucher:bg-[#7a0f1f]/20 transition-colors">
-                    <FileText className="w-2.5 h-2.5" />
-                </span>
-            </button>
+            <InfoTooltip text={voucherNo}>
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation()
+                        setPreviewFile({
+                            name: voucherNo,
+                            src: attachmentUrl,
+                            type: fileType ?? undefined,
+                            size: fileSize ?? undefined,
+                        })
+                        setPanelOpen(true)
+                    }}
+                    className="inline-flex items-center gap-1.5 font-semibold text-[#7a0f1f] cursor-pointer group/voucher truncate max-w-full"
+                    title="Click to view voucher"
+                >
+                    <span className="underline decoration-dotted underline-offset-2 truncate">{voucherNo}</span>
+                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-sm bg-[#7a0f1f]/10 text-[#7a0f1f] group-hover/voucher:bg-[#7a0f1f]/20 transition-colors shrink-0">
+                        <FileText className="w-2.5 h-2.5" />
+                    </span>
+                </button>
+            </InfoTooltip>
 
             <ViewImagePanel
                 open={panelOpen}

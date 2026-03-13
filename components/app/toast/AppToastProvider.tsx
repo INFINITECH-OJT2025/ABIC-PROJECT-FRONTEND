@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 type ToastType = "success" | "error" | "warning" | "info";
 
 interface Toast {
-  id: number;
+  id: string;
   title: string;
   description?: string;
   type: ToastType;
@@ -31,7 +31,7 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
 
   const showToast = useCallback(
     (title: string, description?: string, type: ToastType = "info") => {
-      const id = Date.now();
+      const id = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
       const newToast: Toast = { id, title, description, type };
   
       // Put new toast at the TOP
@@ -44,7 +44,7 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  const removeToast = (id: number) => {
+  const removeToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 

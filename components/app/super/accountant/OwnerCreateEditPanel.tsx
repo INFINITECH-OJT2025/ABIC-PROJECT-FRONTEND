@@ -674,7 +674,6 @@ export default function OwnerCreateEditPanel({
                                         <input
                                             type="date"
                                             value={openingDate}
-                                            max={new Date().toISOString().split('T')[0]}
                                             onChange={(e) => {
                                                 const val = e.target.value;
                                                 setOpeningDate(val);
