@@ -305,9 +305,15 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
             const rowTxMap: Record<number, number> = {};
 
+            let exportRunningBalance = openingBalance || 0;
+
             entries.forEach((entry, txIndex) => {
                 const mainRowIdx = allRows.length; // index within allRows
                 rowTxMap[mainRowIdx + 4] = txIndex;
+
+                const depVal = Number(entry.deposit) || 0;
+                const wthVal = Number(entry.withdrawal) || 0;
+                exportRunningBalance += depVal - wthVal;
 
                 // Main data row
                 allRows.push([
@@ -316,9 +322,9 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                     entry.transType,
                     entry.owner,
                     entry.particulars,
-                    entry.deposit > 0 ? entry.deposit : "",
-                    entry.withdrawal > 0 ? entry.withdrawal : "",
-                    entry.outsBalance,
+                    depVal > 0 ? depVal : "",
+                    wthVal > 0 ? wthVal : "",
+                    exportRunningBalance,
                     entry.fundReference || "-",
                     entry.personInCharge || "-"
                 ]);

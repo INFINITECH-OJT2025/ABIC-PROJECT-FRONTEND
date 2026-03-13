@@ -309,9 +309,15 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
             const rowTxMap: Record<number, number> = {};
 
+            let exportRunningBalance = openingBalance || 0;
+
             entries.forEach((entry, txIndex) => {
                 const mainRowIdx = allRows.length;
                 rowTxMap[mainRowIdx + 4] = txIndex;
+
+                const depVal = Number(entry.deposit) || 0;
+                const wthVal = Number(entry.withdrawal) || 0;
+                exportRunningBalance += depVal - wthVal;
 
                 // Main data row
                 allRows.push([
@@ -320,9 +326,9 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                     entry.transType,
                     entry.owner,
                     entry.particulars,
-                    entry.deposit > 0 ? entry.deposit : "",
-                    entry.withdrawal > 0 ? entry.withdrawal : "",
-                    entry.outsBalance,
+                    depVal > 0 ? depVal : "",
+                    wthVal > 0 ? wthVal : "",
+                    exportRunningBalance,
                     entry.fundReference || "-",
                     entry.personInCharge || "-"
                 ]);
@@ -543,10 +549,15 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
                 // Trans Data
                 if (ur.transactions && ur.transactions.length > 0) {
+                    let exportRunningBalance = ur.openingBalance || 0;
                     ur.transactions.forEach((entry: any, txIndex: number) => {
                         const drIndex = wsData.length;
                         dataRowIndices.push(drIndex);
                         rowTxMap[drIndex] = txIndex;
+
+                        const depVal = Number(entry.deposit) || 0;
+                        const wthVal = Number(entry.withdrawal) || 0;
+                        exportRunningBalance += depVal - wthVal;
 
                         wsData.push([
                             entry.voucherDate,
@@ -554,9 +565,9 @@ function ClientLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                             entry.transType,
                             entry.owner,
                             entry.particulars,
-                            entry.deposit > 0 ? entry.deposit : "",
-                            entry.withdrawal > 0 ? entry.withdrawal : "",
-                            entry.outsBalance,
+                            depVal > 0 ? depVal : "",
+                            wthVal > 0 ? wthVal : "",
+                            exportRunningBalance,
                             entry.fundReference || "-",
                             entry.personInCharge || "-"
                         ]);

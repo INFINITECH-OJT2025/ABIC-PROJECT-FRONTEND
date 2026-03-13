@@ -56,7 +56,8 @@ export const buildOwnerSheet = async (
 
     let currentRow = 0;
 
-    const pushTransactionsBlock = (transactions: any[], startCol: number) => {
+    const pushTransactionsBlock = (transactions: any[], startCol: number, initialBalance: number = 0) => {
+        let runningBalance = initialBalance;
         if (transactions.length === 0) {
             const drIndex = currentRow;
             dataRowIndices.add(drIndex);
@@ -66,13 +67,13 @@ export const buildOwnerSheet = async (
                 if (wsData[currentRow][i] === undefined) wsData[currentRow][i] = "";
             }
 
-            const emptyData = ["No records found", "-", "-", "-", "-", "", "", 0, "-", "-"];
+            const emptyData = ["No records found", "-", "-", "-", "-", "", "", initialBalance, "-", "-"];
             emptyData.forEach((val, i) => {
                 wsData[currentRow][startCol + i] = val;
             });
 
             currentRow++;
-            return;
+            return runningBalance;
         }
 
         transactions.forEach((entry, txIndex) => {
@@ -87,6 +88,7 @@ export const buildOwnerSheet = async (
 
             const depVal = Number(entry.deposit) || 0;
             const wthVal = Number(entry.withdrawal) || 0;
+            runningBalance += depVal - wthVal;
 
             const txData = [
                 entry.voucherDate || entry.createdAt || "N/A",
@@ -96,7 +98,7 @@ export const buildOwnerSheet = async (
                 entry.particulars || "—",
                 depVal > 0 ? depVal : "",
                 wthVal > 0 ? wthVal : "",
-                entry.outsBalance,
+                runningBalance,
                 entry.fundReference || "-",
                 entry.personInCharge || "-"
             ];
@@ -153,6 +155,7 @@ export const buildOwnerSheet = async (
                 currentRow++;
             }
         });
+        return runningBalance;
     };
 
     const writeRow = (data: any[], colOffset: number = 0) => {
@@ -192,13 +195,13 @@ export const buildOwnerSheet = async (
         if (!records || records.length === 0) return fallback;
         const oldest = records[0];
         const isOpening = oldest.transType === 'OPENING' || (oldest.particulars || '').toLowerCase().includes('opening balance');
-        if (isOpening) return Number(oldest.deposit || 0);
+        if (isOpening) return 0;
         return (Number(oldest.outsBalance || 0) - (Number(oldest.deposit || 0)) + (Number(oldest.withdrawal || 0)));
     };
 
     const sortedMain = [...mainRecords].reverse(); // Oldest first
     const mainOpeningBalanceVal = getOpeningBalance(sortedMain);
-    const mainRunningBalanceVal = sortedMain.length > 0 ? sortedMain[sortedMain.length - 1].outsBalance : 0;
+    const mainRunningBalanceVal = sortedMain.reduce((acc, entry) => acc + (Number(entry.deposit) || 0) - (Number(entry.withdrawal) || 0), mainOpeningBalanceVal);
 
     balanceHeaderRows.push(currentRow);
     writeRow([
@@ -217,7 +220,7 @@ export const buildOwnerSheet = async (
     headerRows.push(currentRow);
     writeRow(["DATE", "VOUCHER NO.", "TRANS TYPE", "ACCOUNT SOURCE", "PARTICULARS", "DEPOSIT", "WITHDRAWAL", "OUTS. BALANCE", "FUND REFERENCES", "PERSON IN CHARGE"], MAIN_COL_START);
 
-    pushTransactionsBlock(sortedMain, MAIN_COL_START);
+    pushTransactionsBlock(sortedMain, MAIN_COL_START, mainOpeningBalanceVal);
     maxRowOverall = Math.max(maxRowOverall, currentRow);
 
     // --- 2. UNIT LEDGERS (Standalone Only) ---
@@ -231,7 +234,7 @@ export const buildOwnerSheet = async (
             const uRecords = yearRecords.filter(r => r.ownerForLedger === ownerRecord.name && String(r.unitId) === String(unit.id));
             const sortedURecords = [...uRecords].reverse();
             const openingBal = getOpeningBalance(sortedURecords, unit.opening_balance || 0);
-            const currentBal = sortedURecords.length > 0 ? sortedURecords[sortedURecords.length - 1].outsBalance : openingBal;
+            const currentBal = sortedURecords.reduce((acc, entry) => acc + (Number(entry.deposit) || 0) - (Number(entry.withdrawal) || 0), openingBal);
 
             // Header labels row
             balanceHeaderRows.push(currentRow);
@@ -252,7 +255,7 @@ export const buildOwnerSheet = async (
             headerRows.push(currentRow);
             writeRow(["DATE", "VOUCHER NO.", "TRANS TYPE", "ACCOUNT SOURCE", "PARTICULARS", "DEPOSIT", "WITHDRAWAL", "OUTS. BALANCE", "FUND REFERENCES", "PERSON IN CHARGE"], UNIT_COL_START);
 
-            pushTransactionsBlock(sortedURecords, UNIT_COL_START);
+            pushTransactionsBlock(sortedURecords, UNIT_COL_START, openingBal);
 
             writeRow([], UNIT_COL_START);
             writeRow([], UNIT_COL_START);
@@ -293,7 +296,7 @@ export const buildOwnerSheet = async (
                 const uRecords = yearRecords.filter(r => r.ownerForLedger === ownerRecord.name && String(r.unitId) === String(unit.id));
                 const sortedURecords = [...uRecords].reverse();
                 const openingBal = getOpeningBalance(sortedURecords, unit.opening_balance || 0);
-                const currentBal = sortedURecords.length > 0 ? sortedURecords[sortedURecords.length - 1].outsBalance : openingBal;
+                const currentBal = sortedURecords.reduce((acc, entry) => acc + (Number(entry.deposit) || 0) - (Number(entry.withdrawal) || 0), openingBal);
 
                 budgetTitleRows.push(currentRow);
                 balanceHeaderRows.push(currentRow);
@@ -313,7 +316,7 @@ export const buildOwnerSheet = async (
                 headerRows.push(currentRow);
                 writeRow(["DATE", "VOUCHER NO.", "TRANS TYPE", "ACCOUNT SOURCE", "PARTICULARS", "DEPOSIT", "WITHDRAWAL", "OUTS. BALANCE", "FUND REFERENCES", "PERSON IN CHARGE"], BUDGET_COL_START);
 
-                pushTransactionsBlock(sortedURecords, BUDGET_COL_START);
+                pushTransactionsBlock(sortedURecords, BUDGET_COL_START, openingBal);
                 writeRow([], BUDGET_COL_START);
             });
 
