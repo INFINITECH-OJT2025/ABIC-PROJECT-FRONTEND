@@ -24,6 +24,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import EditTransactionPanel from "@/components/app/super/accountant/EditTransactionPanel";
 import { useAppToast } from "@/components/app/toast/AppToastProvider";
+import ConfirmationModal from "@/components/app/ConfirmationModal";
 
 export type OwnerType = "COMPANY" | "CLIENT" | "MAIN" | "SYSTEM";
 import AppHeader from "@/components/app/AppHeader";
@@ -259,6 +260,7 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
     const [query, setQuery] = useState("");
     const [showExtraColumns, setShowExtraColumns] = useState(false);
+    const [showExportConfirm, setShowExportConfirm] = useState(false);
 
     // Filter/Pagination states
     const [currentPage, setCurrentPage] = useState(1);
@@ -295,12 +297,16 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
             const baseUrl = window.location.origin;
             const allRows: any[][] = [];
             const hyperlinkCells: { r: number; c: number; url: string; text: string }[] = [];
+            const dynMerges: any[] = [];
 
             // Header row at index 0 in allRows (will be placed at Excel row 5, 0-indexed row 4)
             allRows.push(["DATE", "VOUCHER NO.", "TRANS TYPE", "OWNER", "PARTICULARS", "DEPOSIT", "WITHDRAWAL", "OUTS. BALANCE", "FUND REFERENCES", "PERSON IN CHARGE"]);
 
-            entries.forEach((entry) => {
+            const rowTxMap: Record<number, number> = {};
+
+            entries.forEach((entry, txIndex) => {
                 const mainRowIdx = allRows.length; // index within allRows
+                rowTxMap[mainRowIdx + 4] = txIndex;
 
                 // Main data row
                 allRows.push([
@@ -341,11 +347,20 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                         const fileName = file.instrumentNo ?? file.file_name ?? file.name ?? "—";
                         const fileUrl = file.attachmentUrl ?? file.file_url ?? file.url ?? null;
                         const subRowIdx = allRows.length;
+                        rowTxMap[subRowIdx + 4] = txIndex;
                         allRows.push(["", "", fileName, "", "", "", "", "", "", ""]);
                         if (fileUrl) {
                             const fullUrl = fileUrl.startsWith("http") ? fileUrl : `${baseUrl}${fileUrl}`;
                             hyperlinkCells.push({ r: subRowIdx + 4, c: 2, url: fullUrl, text: fileName });
                         }
+                    }
+
+                    if (instrumentFiles.length > 1) {
+                        const startR = mainRowIdx + 4;
+                        const endR = startR + instrumentFiles.length - 1;
+                        [0, 1, 3, 4, 5, 6, 7, 8, 9].forEach(col => {
+                            dynMerges.push({ s: { r: startR, c: col }, e: { r: endR, c: col } });
+                        });
                     }
                 }
             });
@@ -423,7 +438,8 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
             // Merge cells for Title and Subtitle so they don't clip
             ws['!merges'] = [
                 { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }, // ABIC REALTY...
-                { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } }  // Owner name
+                { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } }, // Owner name
+                ...dynMerges
             ];
 
             const range = XLSX.utils.decode_range(ws['!ref'] || "A1:J10");
@@ -448,16 +464,23 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                     } else if (R === 4) { // Table Header (index 4 is Row 5)
                         if (ws[cellAddress].v) ws[cellAddress].s = headerStyle;
                     } else if (R > 4) { // Table Data
-                        // Skip cells with HYPERLINK formulas (they have their own style)
-                        if (ws[cellAddress].f && String(ws[cellAddress].f).startsWith("HYPERLINK")) continue;
+                        const txIndex = rowTxMap[R];
+                        const isStriped = txIndex !== undefined && txIndex % 2 === 1;
+                        const rowFill = isStriped ? { fill: { fgColor: { rgb: "FFE4E8" } } } : {};
+
+                        if (ws[cellAddress].f && String(ws[cellAddress].f).startsWith("HYPERLINK")) {
+                            if (isStriped) ws[cellAddress].s = { ...ws[cellAddress].s, ...rowFill };
+                            continue;
+                        }
+
                         // Deposit, Withdrawal, Outs Balance are cols 5, 6, 7 (F, G, H)
                         if (C >= 5 && C <= 7) {
-                            ws[cellAddress].s = numStyle;
+                            ws[cellAddress].s = { ...numStyle, ...rowFill };
                             if (ws[cellAddress].v !== "" && !isNaN(Number(ws[cellAddress].v))) {
                                 ws[cellAddress].t = "n"; // Force number formatting
                             }
                         } else {
-                            ws[cellAddress].s = dataStyle;
+                            ws[cellAddress].s = { ...dataStyle, ...rowFill };
                         }
                     }
                 }
@@ -745,6 +768,16 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
     return (
         <div className="min-h-screen bg-gray-50/50 pb-12 font-sans flex flex-col">
+            <ConfirmationModal
+                open={showExportConfirm}
+                title="Export Main Ledger"
+                message="This will download the ledger data for the selected owner as an Excel file. Continue?"
+                confirmLabel="Export"
+                icon={Download}
+                color="#7a0f1f"
+                onCancel={() => setShowExportConfirm(false)}
+                onConfirm={() => { setShowExportConfirm(false); handleExport(); }}
+            />
             {/* AppHeader Component */}
             <AppHeader
                 navigation={[]}
@@ -752,7 +785,7 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                 subtitle="View transaction history and running balances for main owners."
                 primaryAction={
                     <button
-                        onClick={handleExport}
+                        onClick={() => setShowExportConfirm(true)}
                         className="flex items-center gap-2 px-4 py-2 bg-white text-[#7a0f1f] rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm"
                     >
                         <Download className="w-4 h-4" />

@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import AppHeader from "@/components/app/AppHeader";
-import { Download, Search, ChevronsUpDown, ChevronUp, ChevronDown } from "lucide-react";
+import { Download, Search, ChevronsUpDown, ChevronUp, ChevronDown, Loader2 } from "lucide-react";
 import SharedToolbar from "@/components/app/SharedToolbar";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const BORDER = "rgba(0,0,0,0.12)";
 
@@ -11,8 +13,76 @@ export default function AccountSummaryShared({ role }: { role: "superadmin" | "a
     const [query, setQuery] = useState("");
     const [selectedTable, setSelectedTable] = useState("summary");
     const [selectedCategory, setSelectedCategory] = useState("all");
+    const [isLoading, setIsLoading] = useState(false);
+
+    // API state for summary
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [remainingMoneyData, setRemainingMoneyData] = useState<any[]>([]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [clientDebtData, setClientDebtData] = useState<any[]>([]);
+    const [totalRemainingClientMoney, setTotalRemainingClientMoney] = useState(0);
+    const [totalClientDebt, setTotalClientDebt] = useState(0);
+    const [totalActualMoney, setTotalActualMoney] = useState(0);
+    const [missingAmount, setMissingAmount] = useState(0);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [unitOwnerData, setUnitOwnerData] = useState<any[]>([]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [bankAccountsData, setBankAccountsData] = useState<any[]>([]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [otherBankAccountsData, setOtherBankAccountsData] = useState<any[]>([]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [condoBankAccountsData, setCondoBankAccountsData] = useState<any[]>([]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [employeeBankAccountsData, setEmployeeBankAccountsData] = useState<any[]>([]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [securityBankContactData, setSecurityBankContactData] = useState<any[]>([]);
 
     const [sortConfigs, setSortConfigs] = useState<Record<string, { key: string, direction: 'asc' | 'desc' } | null>>({});
+
+    const fetchSummaryData = async () => {
+        setIsLoading(true);
+        try {
+            const res = await fetch("/api/accountant/account-summary");
+            const data = await res.json();
+
+            if (data?.success) {
+                const results = data.data;
+
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const formattedMoney = results.table_client_money_and_debt?.items?.map((item: any) => ({
+                    clientName: item.name,
+                    amount: item.raw_balance,
+                })) || [];
+                setRemainingMoneyData(formattedMoney);
+
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const formattedDebt = results.table_client_debt?.items?.map((item: any) => ({
+                    clientName: item.name,
+                    amount: item.raw_balance,
+                })) || [];
+                setClientDebtData(formattedDebt);
+
+                setTotalRemainingClientMoney(results.result?.total_remaining_client_money || 0);
+                setTotalClientDebt(results.result?.total_client_debt || 0);
+                setTotalActualMoney(results.separate?.total_actual_money || 0);
+                setMissingAmount(results.separate?.missing_amount || 0);
+
+                // Now read units and banks directly from new payload
+                setUnitOwnerData(results.table_units || []);
+                setBankAccountsData(results.table_bank_accounts || []);
+                setCondoBankAccountsData(results.table_condo_bank_accounts || []);
+            }
+        } catch (error) {
+            console.error("Failed to fetch account summary:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchSummaryData();
+    }, []);
 
     const handleSort = (tableId: string, key: string) => {
         setSortConfigs((prev) => {
@@ -25,6 +95,7 @@ export default function AccountSummaryShared({ role }: { role: "superadmin" | "a
         });
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const getSortedData = (data: any[], tableId: string) => {
         let processedData = data;
 
@@ -53,104 +124,6 @@ export default function AccountSummaryShared({ role }: { role: "superadmin" | "a
         });
     };
 
-
-    const unitOwnerData = [
-        { owner: "ABIGAIL RUTHCHIN LAIFUN LIM", unit: "Bellagio B3 Slot 10" },
-        { owner: "ALFONSO VY", unit: "Jazz Res. Tower A 1602" },
-        { owner: "AMADOR , KRISTINE ANNE BANTOC", unit: "Air Res. 2470" },
-        { owner: "ATHENA SOPHIA RHOSSA TIBI", unit: "Seibu 8A2" },
-        { owner: "CHANGJIANG HUANG", unit: "KBR 2517" },
-        { owner: "CHANGJIANG HUANG", unit: "KBR 5113" },
-        { owner: "CHANGJIANG HUANG", unit: "Gramercy Res. 1702" },
-        { owner: "CHENGSHENG SHI", unit: "KGR Icho 403" },
-        { owner: "CHENGSHENG SHI", unit: "KGR Icho 412" },
-        { owner: "CHEN BINBIN", unit: "Sheridan ST 3007" },
-    ];
-
-    const bankAccountsData = [
-        { name: "ABIC REALTY", bank: "SECURITY BANK (202)", accountName: "ABIC REALTY CORPORATION", accountNumber: "0000-043-381-202" },
-        { name: "ABIC REALTY", bank: "SECURITY BANK (443)", accountName: "ABIC REALTY CORPORATION", accountNumber: "0000-043-382-443" },
-        { name: "ABIC REALTY", bank: "SECURITY BANK (483)", accountName: "ABIC REALTY CORPORATION", accountNumber: "0000-043-382-483" },
-        { name: "ABIC REALTY & CONSULTANCY", bank: "SECURITY BANK (544)", accountName: "ABIC REALTY & CONSULTANCY CORPORATION", accountNumber: "0000-067-389-544" },
-        { name: "ABIC UNO TRADING", bank: "SECURITY BANK - USD", accountName: "ABIC UNO TRADING CORP.", accountNumber: "0000-057-905-043" },
-        { name: "ANGELLE S. SARMIENTO", bank: "SECURITY BANK", accountName: "ANGELLE SAMSON SARMIENTO", accountNumber: "0000-026-376-543" },
-        { name: "BAO HAOMIAO", bank: "SECURITY BANK", accountName: "BAO HAOMIAO", accountNumber: "0000-033-123-578" },
-        { name: "CHOU TIANYI", bank: "EASTWEST", accountName: "TIANYI CHOU", accountNumber: "200019904317" },
-        { name: "DANDAN LI", bank: "BDO", accountName: "DANDAN LI", accountNumber: "006940028470" },
-        { name: "FENG DAN", bank: "UNION BANK", accountName: "JIE ZHOU", accountNumber: "001540004445" },
-    ];
-
-    const otherBankAccountsData = [
-        { name: "KALBE INTERNATIONAL PTE LTD.", bank: "PHILIPPINE BUSINESS BANK", accountName: "KALBE INTERNATIONAL PTE LTD.", accountNumber: "011000020780" },
-        { name: "INFINITECH ADVERTISING CORPORATION", bank: "SECURITY BANK", accountName: "INFINITECH ADVERTISING CORPORATION", accountNumber: "0000074264683" },
-    ];
-
-    const employeeBankAccountsData = [
-        { name: "ANGELY VICTORIANO", bank: "BDO", accountName: "ANGELY VICTORIANO", accountNumber: "013460007685" },
-        { name: "MARIA KRISSA CHAREZ R. BONGON", bank: "SECURITY BANK", accountName: "MARIA KRISSA CHAREZ R. BONGON", accountNumber: "000069637410" },
-    ];
-
-    const securityBankContactData = [
-        { branch: "SECURITY BANK - MEDICAL PLAZA", phone: "0917-886-5938", email: "", viber: "0917-886-5938" },
-        { branch: "SECURITY BANK - CHINO ROCES - YAKAL", phone: "0917-845-3693 / 0920-986-041", email: "crmarano@securitybank.com.ph", viber: "0917-845-3693" },
-        { branch: "SECURITY BANK - PASAY TAFT BRANCH", phone: "0917-801-3469 / 0920-977-975", email: "bracamonte@securitybank.com.ph, JAJalina@securitybank.com.ph, pasaytaft@securitybank.com.ph", viber: "" },
-    ];
-
-    const condoBankAccountsData = [
-        { condominium: "ADB Avenue Tower", bank: "SECURITY BANK", accountName: "ADB Tower Condominium Corporation", accountNumber: "0000018983147" },
-        { condominium: "Alea Residences", bank: "GCASH (Bills Payment)", accountName: "DMCI Homes (Condo Corp)", accountNumber: "Alea Budi 409" },
-        { condominium: "Bellagio Two Condominium", bank: "CHINABANK", accountName: "Bellagio Two Condominium Association, Inc.", accountNumber: "2550017017" },
-        { condominium: "Brixton Place", bank: "GCASH (Bills Payment)", accountName: "*depends who own the unit property*", accountNumber: "Brent1207" },
-        { condominium: "Brixton Place", bank: "GCASH (Bills Payment)", accountName: "*depends who own the unit property*", accountNumber: "Brent4204" },
-        { condominium: "Campos Rueda", bank: "METROBANK", accountName: "CAMPOS RUEDA & SONS INC", accountNumber: "0047004543153" },
-        { condominium: "Coast Residences", bank: "BDO (Bills Payment)", accountName: "COASTB012833", accountNumber: "" },
-        { condominium: "Fairlane", bank: "GCASH / Paymongo", accountName: "3518", accountNumber: "6000135018" },
-        { condominium: "Fairlane", bank: "GCASH / Paymongo", accountName: "3519", accountNumber: "6000135019" },
-        { condominium: "Field Residences", bank: "BDO (Bills Payment)", accountName: "Field Residences Condominium Corporation", accountNumber: "FIELDB80801" },
-        { condominium: "Gramercy Residences", bank: "BDO (Bills Payment)", accountName: "Gramercy Residences Condominium Corporation", accountNumber: "003560197990" },
-        { condominium: "Kai Garden Residences", bank: "GCASH (Bills Payment)", accountName: "*depends who own the unit property*", accountNumber: "5700204012" },
-        { condominium: "Kai Garden Residences", bank: "GCASH (Bills Payment)", accountName: "*depends who own the unit property*", accountNumber: "5700204003" },
-        { condominium: "Kai Garden Residences", bank: "GCASH (Bills Payment)", accountName: "*depends who own the unit property*", accountNumber: "5700203015" },
-        { condominium: "Knightsbridge Residences", bank: "BDO (Bills Payment)", accountName: "Knightsbridge Residences", accountNumber: "003560233008" },
-        { condominium: "Kroma Tower", bank: "BPI", accountName: "Kroma Tower Condominium Corporation", accountNumber: "1901-0012-58" },
-        { condominium: "Milano Residences", bank: "METROBANK", accountName: "The Milano Residences Condo Corp", accountNumber: "7707770001761" },
-        { condominium: "Prisma Residences", bank: "GCASH (Bills Payment)", accountName: "*depends who own the unit property*", accountNumber: "5500132006" },
-        { condominium: "Prisma Residences", bank: "GCASH (Bills Payment)", accountName: "*depends who own the unit property*", accountNumber: "5500214010" },
-        { condominium: "Prisma Residences", bank: "GCASH (Bills Payment)", accountName: "*depends who own the unit property*", accountNumber: "5500119016" },
-        { condominium: "Prisma Residences", bank: "GCASH (Bills Payment)", accountName: "*depends who own the unit property*", accountNumber: "5500234010" },
-        { condominium: "Prisma Residences", bank: "GCASH (Bills Payment)", accountName: "*depends who own the unit property*", accountNumber: "5500133008" },
-        { condominium: "Prisma Residences", bank: "GCASH (Bills Payment)", accountName: "*depends who own the unit property*", accountNumber: "5500102004" },
-        { condominium: "Salcedo Skysuite", bank: "UNIONBANK", accountName: "Salcedo Skysuites Condominium Association Inc", accountNumber: "0012-4003-6090" },
-        { condominium: "Sheridan South Tower", bank: "GCASH (Bills Payment)", accountName: "DMCI Homes (Condo Corp)", accountNumber: "Sheridan3007" },
-        { condominium: "The Milano Residences Condo Corp", bank: "METROBANK", accountName: "The Milano Residences Condo Corp", accountNumber: "770-7-77000176-1" },
-        { condominium: "The Venice Luxury Residences", bank: "UNIONBANK", accountName: "The Venice Luxury Residences Condominium Associa", accountNumber: "001240034286" },
-    ];
-
-    const remainingMoneyData = [
-        { clientName: "ABIC - UNIT 303", amount: -154312.08 },
-        { clientName: "ABIC REALTY", amount: 0 },
-        { clientName: "ANGELLE SARMIENTO", amount: -320999.97 },
-        { clientName: "BAO HAOMIAO", amount: 23000.00 },
-        { clientName: "CHEN BINBIN", amount: 100050.00 },
-        { clientName: "CHOU TIANYI", amount: 56750.00 },
-        { clientName: "DANDAN LI", amount: -36026.25 },
-        { clientName: "FENG DAN", amount: 0 },
-        { clientName: "GUO JUNSHENG", amount: -33566.79 },
-        { clientName: "GUO XIONGZHOU", amount: -594.58 },
-    ];
-
-    const clientDebtData = [
-        { clientName: "ABIC - UNIT 303", amount: -154312.08 },
-        { clientName: "ABIC REALTY", amount: -1000.00 },
-        { clientName: "ANGELLE SARMIENTO", amount: -320999.97 },
-        { clientName: "DANDAN LI", amount: -36026.25 },
-        { clientName: "GUO JUNSHENG", amount: -33566.79 },
-        { clientName: "GUO XIONGZHOU", amount: -594.58 },
-        { clientName: "HONG TAO", amount: -3658.87 },
-        { clientName: "INFINITECH ADVERTISING CORP.", amount: -393175.45 },
-        { clientName: "INFINITRADE (UNIT 111)", amount: -155986.45 },
-        { clientName: "JULIE CHEN", amount: -2889.44 },
-    ];
 
     const formatCurrency = (amount: number) => {
         if (amount < 0) {
@@ -193,16 +166,13 @@ export default function AccountSummaryShared({ role }: { role: "superadmin" | "a
                             containerMaxWidth="max-w-full"
                             onRefresh={() => { }}
                         >
-                            <select
-                                value={selectedTable}
-                                onChange={(e) => setSelectedTable(e.target.value)}
-                                className="h-10 rounded-lg border border-gray-300 text-sm px-3 text-gray-700 bg-white focus:border-[#7a0f1f] focus:ring-2 focus:ring-[#7a0f1f]/20 focus:outline-none shrink-0"
-                            >
-                                <option value="summary">Summary (Money & Debt)</option>
-                                <option value="bank_accounts">Unit Owners & Bank Accounts</option>
-                                <option value="other_accounts">Other/Condo Bank Accounts</option>
-                                <option value="employee_contacts">Employee / Security Bank Contact</option>
-                            </select>
+                            <Tabs value={selectedTable} onValueChange={setSelectedTable} className="w-full sm:w-auto overflow-x-auto">
+                                <TabsList className="bg-gray-100 border border-gray-200/60 shadow-inner h-11 p-1 w-full flex-nowrap sm:w-auto space-x-1 rounded-xl">
+                                    <TabsTrigger value="summary" className="rounded-lg font-bold text-xs tracking-wider whitespace-nowrap px-4 py-2 data-[state=active]:bg-[#7a0f1f] data-[state=active]:text-white text-gray-600 data-[state=active]:shadow-md transition-all duration-300">SUMMARY (MONEY & DEBT)</TabsTrigger>
+                                    <TabsTrigger value="bank_accounts" className="rounded-lg font-bold text-xs tracking-wider whitespace-nowrap px-4 py-2 data-[state=active]:bg-[#7a0f1f] data-[state=active]:text-white text-gray-600 data-[state=active]:shadow-md transition-all duration-300">UNIT OWNERS & BANK ACCOUNTS</TabsTrigger>
+                                    <TabsTrigger value="other_accounts" className="rounded-lg font-bold text-xs tracking-wider whitespace-nowrap px-4 py-2 data-[state=active]:bg-[#7a0f1f] data-[state=active]:text-white text-gray-600 data-[state=active]:shadow-md transition-all duration-300">OTHER ACCOUNTS</TabsTrigger>
+                                </TabsList>
+                            </Tabs>
                         </SharedToolbar>
                     </div>
 
@@ -250,12 +220,31 @@ export default function AccountSummaryShared({ role }: { role: "superadmin" | "a
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-200">
-                                                {getSortedData(remainingMoneyData, "remainingMoney").map((row, idx) => (
-                                                    <tr key={idx} className="border-b border-gray-100 transition-colors" style={{ background: idx % 2 === 1 ? 'rgba(253, 242, 248, 0.6)' : '#ffffff' }}>
-                                                        <td className="px-4 py-2 text-xs text-gray-900 font-bold text-left border-r border-gray-200 uppercase">{row.clientName}</td>
-                                                        <td className={`px-4 py-2 text-sm font-bold text-right ${row.amount < 0 ? 'text-[#dc2626]' : 'text-gray-900'}`}>{formatCurrency(row.amount)}</td>
+                                                {isLoading ? (
+                                                    Array.from({ length: 5 }).map((_, idx) => (
+                                                        <tr key={`skel-money-${idx}`} className="border-b border-gray-50 transition-colors bg-white">
+                                                            <td className="px-5 py-4">
+                                                                <Skeleton className="h-4 w-[60%] bg-gray-200 rounded-md" />
+                                                            </td>
+                                                            <td className="px-5 py-4 flex justify-end">
+                                                                <Skeleton className="h-4 w-24 bg-gray-200 rounded-md" />
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                ) : getSortedData(remainingMoneyData, "remainingMoney").length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={2} className="px-4 py-8 text-center text-sm text-gray-500">
+                                                            No remaining money or debt found.
+                                                        </td>
                                                     </tr>
-                                                ))}
+                                                ) : (
+                                                    getSortedData(remainingMoneyData, "remainingMoney").map((row, idx) => (
+                                                        <tr key={idx} className="border-b border-gray-100 transition-colors" style={{ background: idx % 2 === 1 ? 'rgba(253, 242, 248, 0.6)' : '#ffffff' }}>
+                                                            <td className="px-4 py-2 text-xs text-gray-900 font-bold text-left border-r border-gray-200 uppercase">{row.clientName}</td>
+                                                            <td className={`px-4 py-2 text-sm font-bold text-right ${row.amount < 0 ? 'text-[#dc2626]' : 'text-gray-900'}`}>{formatCurrency(row.amount)}</td>
+                                                        </tr>
+                                                    ))
+                                                )}
                                             </tbody>
                                         </table>
                                     </div>
@@ -269,11 +258,11 @@ export default function AccountSummaryShared({ role }: { role: "superadmin" | "a
                                             <tbody className="divide-y divide-white/20">
                                                 <tr className="bg-[#7a0f1f]">
                                                     <td className="px-4 py-3 font-bold text-xs uppercase text-center border-r border-white/20 text-white tracking-wider w-2/3">TOTAL REMAINING CLIENT MONEY</td>
-                                                    <td className="px-4 py-3 font-bold text-sm text-right text-white w-1/3">3,609,441.21</td>
+                                                    <td className="px-4 py-3 font-bold text-sm text-right text-white w-1/3">{formatCurrency(totalRemainingClientMoney)}</td>
                                                 </tr>
                                                 <tr className="bg-[#7a0f1f]">
                                                     <td className="px-4 py-3 font-bold text-xs uppercase text-center border-r border-white/20 text-white tracking-wider w-2/3">TOTAL CLIENT DEBT</td>
-                                                    <td className="px-4 py-3 font-bold text-sm text-right text-[#ff8a8a] w-1/3">-1,628,580.28</td>
+                                                    <td className="px-4 py-3 font-bold text-sm text-right text-[#ff8a8a] w-1/3">{formatCurrency(totalClientDebt)}</td>
                                                 </tr>
                                             </tbody>
                                         </table>
@@ -288,11 +277,11 @@ export default function AccountSummaryShared({ role }: { role: "superadmin" | "a
                                             <tbody className="divide-y divide-white/20">
                                                 <tr className="bg-[#7a0f1f]">
                                                     <td className="px-4 py-3 font-bold text-xs uppercase text-center border-r border-white/20 text-white tracking-wider w-2/3">TOTAL ACTUAL MONEY</td>
-                                                    <td className="px-4 py-3 font-bold text-sm text-right text-white w-1/3">109,000.00</td>
+                                                    <td className="px-4 py-3 font-bold text-sm text-right text-white w-1/3">{formatCurrency(totalActualMoney)}</td>
                                                 </tr>
                                                 <tr className="bg-[#7a0f1f]">
                                                     <td className="px-4 py-3 font-bold text-xs uppercase text-center border-r border-white/20 text-white tracking-wider w-2/3">MISSING AMOUNT</td>
-                                                    <td className="px-4 py-3 font-bold text-sm text-right text-[#ff8a8a] w-1/3">(3,500,441.21)</td>
+                                                    <td className="px-4 py-3 font-bold text-sm text-right text-[#ff8a8a] w-1/3">{formatCurrency(missingAmount)}</td>
                                                 </tr>
                                             </tbody>
                                         </table>
@@ -342,12 +331,31 @@ export default function AccountSummaryShared({ role }: { role: "superadmin" | "a
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-200">
-                                                {getSortedData(clientDebtData, "clientDebt").map((row, idx) => (
-                                                    <tr key={idx} className="border-b border-gray-100 transition-colors" style={{ background: idx % 2 === 1 ? 'rgba(253, 242, 248, 0.6)' : '#ffffff' }}>
-                                                        <td className="px-4 py-2 text-xs text-gray-900 font-bold text-left border-r border-gray-200 uppercase">{row.clientName}</td>
-                                                        <td className="px-4 py-2 text-sm font-bold text-right text-[#dc2626]">{formatCurrency(row.amount)}</td>
+                                                {isLoading ? (
+                                                    Array.from({ length: 5 }).map((_, idx) => (
+                                                        <tr key={`skel-debt-${idx}`} className="border-b border-gray-50 transition-colors bg-white">
+                                                            <td className="px-5 py-4">
+                                                                <Skeleton className="h-4 w-[60%] bg-gray-200 rounded-md" />
+                                                            </td>
+                                                            <td className="px-5 py-4 flex justify-end">
+                                                                <Skeleton className="h-4 w-24 bg-gray-200 rounded-md" />
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                ) : getSortedData(clientDebtData, "clientDebt").length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={2} className="px-4 py-8 text-center text-sm text-gray-500">
+                                                            No debt found.
+                                                        </td>
                                                     </tr>
-                                                ))}
+                                                ) : (
+                                                    getSortedData(clientDebtData, "clientDebt").map((row, idx) => (
+                                                        <tr key={idx} className="border-b border-gray-100 transition-colors" style={{ background: idx % 2 === 1 ? 'rgba(253, 242, 248, 0.6)' : '#ffffff' }}>
+                                                            <td className="px-4 py-2 text-xs text-gray-900 font-bold text-left border-r border-gray-200 uppercase">{row.clientName}</td>
+                                                            <td className="px-4 py-2 text-sm font-bold text-right text-[#dc2626]">{formatCurrency(row.amount)}</td>
+                                                        </tr>
+                                                    ))
+                                                )}
                                             </tbody>
                                         </table>
                                     </div>
@@ -361,7 +369,7 @@ export default function AccountSummaryShared({ role }: { role: "superadmin" | "a
                                             <tbody className="divide-y divide-white/20">
                                                 <tr className="bg-[#7a0f1f]">
                                                     <td className="px-4 py-3 font-bold text-xs uppercase text-center border-r border-white/20 text-white tracking-wider w-2/3">TOTAL DEBT</td>
-                                                    <td className="px-4 py-3 font-bold text-sm text-right text-[#ff8a8a] w-1/3">-1,629,580.28</td>
+                                                    <td className="px-4 py-3 font-bold text-sm text-right text-[#ff8a8a] w-1/3">{formatCurrency(totalClientDebt)}</td>
                                                 </tr>
                                             </tbody>
                                         </table>
@@ -416,10 +424,23 @@ export default function AccountSummaryShared({ role }: { role: "superadmin" | "a
                                             </thead>
                                             <tbody className="divide-y divide-gray-200">
                                                 {getSortedData(unitOwnerData, "unitOwner").map((row, idx) => (
-                                                    <tr key={idx} className="border-b border-gray-100 transition-colors" style={{ background: idx % 2 === 1 ? 'rgba(253, 242, 248, 0.6)' : '#ffffff' }}>
-                                                        <td className="px-4 py-2 text-xs text-gray-900 font-bold text-left border-r border-gray-200 uppercase">{row.owner}</td>
-                                                        <td className="px-4 py-2 text-xs text-gray-900 text-left">{row.unit}</td>
-                                                    </tr>
+                                                    row.units && row.units.length > 0 ? (
+                                                        row.units.map((unit: string, unitIdx: number) => (
+                                                            <tr key={`${idx}-${unitIdx}`} className="border-b border-gray-100 transition-colors" style={{ background: idx % 2 === 1 ? 'rgba(253, 242, 248, 0.6)' : '#ffffff' }}>
+                                                                {unitIdx === 0 && (
+                                                                    <td rowSpan={row.units.length} className="px-4 py-2 text-xs text-gray-900 font-bold text-left border-r border-gray-200 uppercase align-top">
+                                                                        {row.owner}
+                                                                    </td>
+                                                                )}
+                                                                <td className="px-4 py-2 text-xs text-gray-900 text-left border-b border-gray-50">{unit}</td>
+                                                            </tr>
+                                                        ))
+                                                    ) : (
+                                                        <tr key={idx} className="border-b border-gray-100 transition-colors" style={{ background: idx % 2 === 1 ? 'rgba(253, 242, 248, 0.6)' : '#ffffff' }}>
+                                                            <td className="px-4 py-2 text-xs text-gray-900 font-bold text-left border-r border-gray-200 uppercase align-top">{row.owner}</td>
+                                                            <td className="px-4 py-2 text-xs text-gray-900 text-left border-b border-gray-50">-</td>
+                                                        </tr>
+                                                    )
                                                 ))}
                                             </tbody>
                                         </table>
