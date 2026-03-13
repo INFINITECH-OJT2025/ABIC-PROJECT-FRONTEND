@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { AppToastProvider } from "@/components/app/toast/AppToastProvider";
+import { ExportProgressProvider } from "@/components/app/export/ExportProgressProvider";
 import "./globals.css";
 
 const inter = Inter({
@@ -26,7 +27,9 @@ export default function RootLayout({
         style={{ fontFamily: "Inter, system-ui, sans-serif" }}
       >
         <AppToastProvider>
-          {children}
+          <ExportProgressProvider>
+            {children}
+          </ExportProgressProvider>
         </AppToastProvider>
       </body>
     </html>
