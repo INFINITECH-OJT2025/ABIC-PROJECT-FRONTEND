@@ -3,7 +3,7 @@ import { superAdminNav, accountantNav } from "@/lib/navigation";
 ;
 
 
-import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from "react";
 import {
     ArrowDownCircle,
     ArrowUpCircle,
@@ -256,6 +256,7 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
 
     const [entries, setEntries] = useState<LedgerEntry[]>([]);
     const [openingBalance, setOpeningBalance] = useState<number>(0);
+    const [runningBalance, setRunningBalance] = useState<number>(0);
     const [entriesLoading, setEntriesLoading] = useState(false);
 
     const [query, setQuery] = useState("");
@@ -276,7 +277,7 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
             const currentOwnerName = owners.find(o => String(o.id) === String(selectedOwnerId))?.name ?? "Owner";
             const sanitizedName = currentOwnerName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
 
-            const runningBalanceVal = entries.length > 0 ? entries[entries.length - 1].outsBalance : 0;
+            const runningBalanceVal = runningBalance;
 
             const ws = XLSX.utils.json_to_sheet([]);
 
@@ -537,10 +538,12 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                 if (data.success) {
                     setEntries(data.data.transactions || []);
                     setOpeningBalance(data.data.openingBalance || 0);
+                    setRunningBalance(data.data.runningBalance || 0);
                     setCurrentPage(1); // Reset to page 1 on new fetch
                 } else {
                     setEntries([]);
                     setOpeningBalance(0);
+                    setRunningBalance(0);
                 }
             })
             .catch(err => console.error(err))
@@ -730,17 +733,26 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
         }
     ], [showExtraColumns]);
 
-    const filteredEntries = React.useMemo(() => {
-        if (!query.trim()) return entries;
+    // Compute virtual outsBalance for each row from openingBalance + cumulative deposits/withdrawals
+    const entriesWithBalance = useMemo(() => {
+        let balance = 0;
+        return entries.map(e => {
+            balance = balance + e.deposit - e.withdrawal;
+            return { ...e, outsBalance: balance };
+        });
+    }, [entries]);
+
+    const filteredEntries = useMemo(() => {
+        if (!query.trim()) return entriesWithBalance;
         const lowerQuery = query.toLowerCase();
-        return entries.filter(e =>
+        return entriesWithBalance.filter(e =>
             (e.particulars && e.particulars.toLowerCase().includes(lowerQuery)) ||
             (e.transType && e.transType.toLowerCase().includes(lowerQuery)) ||
             (e.voucherNo && e.voucherNo.toLowerCase().includes(lowerQuery)) ||
             (e.owner && e.owner.toLowerCase().includes(lowerQuery)) ||
             (String(e.id).includes(lowerQuery))
         );
-    }, [entries, query]);
+    }, [entriesWithBalance, query]);
 
     // Client-side pagination logic
     const PER_PAGE = 10;
@@ -855,7 +867,7 @@ function MainLedgerPage({ role }: { role: "superadmin" | "accountant" }) {
                                 <div>
                                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Running Balance</p>
                                     <p className="text-lg font-bold text-[#7a0f1f] mt-0.5">
-                                        {entriesLoading ? "..." : (entries.length > 0 ? `₱${entries[entries.length - 1].outsBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}` : "₱0.00")}
+                                        {entriesLoading ? "..." : `₱${runningBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
                                     </p>
                                 </div>
                             </div>
