@@ -942,8 +942,8 @@ export default function TransactionForm({ initialMode = "DEPOSIT", onModeChange 
             });
 
             const endpoint = mode === "DEPOSIT"
-                ? "/api/head/accountant/transactions/deposit"
-                : "/api/head/accountant/transactions/withdrawal";
+                ? "/api/accountant/transactions/deposit"
+                : "/api/accountant/transactions/withdrawal";
 
             const res = await fetch(endpoint, { method: "POST", body });
             const data = await res.json().catch(() => ({}));

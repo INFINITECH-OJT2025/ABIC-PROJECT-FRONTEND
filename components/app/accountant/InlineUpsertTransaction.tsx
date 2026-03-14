@@ -138,7 +138,7 @@ function OwnerTypeBadge({ type }: { type: string }) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface InlineUpsertTransactionProps {
-    type: "date" | "voucher" | "transType" | "owner" | "particulars" | "deposit" | "withdrawal";
+    type: "date" | "voucher" | "transType" | "owner" | "particulars" | "deposit" | "withdrawal" | "fundReference" | "personInCharge";
     row: LedgerEntry;
     isNew?: boolean;
     // Props for Updates
@@ -169,6 +169,7 @@ interface InlineUpsertTransactionProps {
 
 export function InlineUpsertTransaction(props: InlineUpsertTransactionProps) {
     const { type, row, isNew, ...rest } = props;
+    if ((row as any)?.isPlaceholder) return null;
 
     if (isNew) {
         return <NewTransactionCell type={type} {...rest} />;
@@ -223,6 +224,10 @@ export function InlineUpsertTransaction(props: InlineUpsertTransactionProps) {
             return <InlineAmountCell row={row} type="DEPOSIT" forceEdit={forceEdit} draft={rest.draft} setDraft={rest.setDraft} />;
         case "withdrawal":
             return <InlineAmountCell row={row} type="WITHDRAWAL" forceEdit={forceEdit} draft={rest.draft} setDraft={rest.setDraft} />;
+        case "fundReference":
+            return <InlineTextCell row={row} field="fundReference" forceEdit={forceEdit} draft={rest.draft!} setDraft={rest.setDraft!} placeholder="Enter fund reference" />;
+        case "personInCharge":
+            return <InlineTextCell row={row} field="personInCharge" forceEdit={forceEdit} draft={rest.draft!} setDraft={rest.setDraft!} placeholder="Enter person in charge" />;
         default:
             return null;
     }
@@ -485,7 +490,7 @@ function NewTransactionCell({ type, ...props }: any) {
                         <ChevronDown className={`w-3.5 h-3.5 opacity-40 shrink-0 transition-transform ${openOwner ? "rotate-180" : ""}`} />
                     </button>
                     {openOwner && (
-                        <div className="absolute top-full mt-2 left-0 w-72 z-[110] bg-white border border-gray-100 shadow-2xl rounded-xl overflow-hidden py-1 ring-1 ring-black/10 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <div className="absolute bottom-full mb-2 left-0 w-72 z-[110] bg-white border border-gray-100 shadow-2xl rounded-xl overflow-hidden py-1 ring-1 ring-black/10 animate-in fade-in slide-in-from-bottom-2 duration-200">
                             <div className="px-4 py-3 border-b border-gray-50 flex items-center gap-3 bg-gray-50/50">
                                 <Search className="w-3.5 h-3.5 text-gray-400" />
                                 <input 
@@ -551,7 +556,7 @@ function NewTransactionCell({ type, ...props }: any) {
                                     <ChevronDown className={`w-3 h-3 text-gray-400 shrink-0 transition-transform ${openUnit ? "rotate-180" : ""}`} />
                                 </button>
                                 {openUnit && (
-                                    <div className="absolute top-full mt-2 left-0 w-64 z-[110] bg-white border border-gray-100 shadow-2xl rounded-xl overflow-hidden py-1 ring-1 ring-black/10 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="absolute bottom-full mb-2 left-0 w-64 z-[110] bg-white border border-gray-100 shadow-2xl rounded-xl overflow-hidden py-1 ring-1 ring-black/10 animate-in fade-in slide-in-from-bottom-2 duration-200">
                                         <div className="px-3 py-2 border-b border-gray-50 flex items-center gap-2 bg-gray-50/50">
                                             <Search className="w-3 h-3 text-gray-400" />
                                             <input 
@@ -654,9 +659,69 @@ function NewTransactionCell({ type, ...props }: any) {
                     />
                 </div>
             );
+        case "fundReference":
+            return (
+                <input
+                    type="text"
+                    value={newTxRow?.fundReference || ""}
+                    placeholder="Enter fund reference"
+                    onChange={(e) => setNewTxRow((prev: any) => prev ? { ...prev, fundReference: e.target.value } : null)}
+                    className={CELL_INPUT}
+                />
+            );
+        case "personInCharge":
+            return (
+                <input
+                    type="text"
+                    value={newTxRow?.personInCharge || ""}
+                    placeholder="Enter person in charge"
+                    onChange={(e) => setNewTxRow((prev: any) => prev ? { ...prev, personInCharge: e.target.value } : null)}
+                    className={CELL_INPUT}
+                />
+            );
         default:
             return null;
     }
+}
+
+// ─── Inline Text Cell ────────────────────────────────────────────────────────
+
+function InlineTextCell({
+    row,
+    field,
+    forceEdit,
+    draft,
+    setDraft,
+    placeholder
+}: {
+    row: LedgerEntry;
+    field: keyof LedgerEntry;
+    forceEdit: boolean;
+    draft: LedgerEntry | null;
+    setDraft: React.Dispatch<React.SetStateAction<LedgerEntry | null>>;
+    placeholder: string;
+}) {
+    const value = draft ? (draft[field] as string || "") : (row[field] as string || "");
+
+    if (forceEdit) {
+        return (
+            <div className="w-full py-0.5" onClick={(e) => e.stopPropagation()}>
+                <input
+                    type="text"
+                    value={value}
+                    onChange={(e) => setDraft((prev: any) => prev ? { ...prev, [field]: e.target.value } : null)}
+                    placeholder={placeholder}
+                    className={CELL_INPUT}
+                />
+            </div>
+        );
+    }
+
+    return (
+        <span className="text-sm font-medium">
+            {(row[field] as string) || "—"}
+        </span>
+    );
 }
 
 // ─── Inline Date Cell ─────────────────────────────────────────────────────────
@@ -805,7 +870,7 @@ function InlineVoucherCell({
                 <ChevronDown className={cn("w-3.5 h-3.5 opacity-30 shrink-0 transition-transform", showOptions ? "rotate-180" : "")} />
             </button>
             {showOptions && (
-                <div className="absolute top-full mt-2 z-[110] bg-white rounded-xl border border-gray-100 shadow-2xl overflow-hidden py-1 min-w-[160px] animate-in fade-in slide-in-from-top-2 duration-200 ring-1 ring-black/10">
+                <div className="absolute bottom-full mb-2 z-[110] bg-white rounded-xl border border-gray-100 shadow-2xl overflow-hidden py-1 min-w-[160px] animate-in fade-in slide-in-from-bottom-2 duration-200 ring-1 ring-black/10">
                     <button onClick={handleNoVoucherClick} className="w-full flex items-center gap-3 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 hover:text-red-700 transition-colors text-left group">
                         <EyeOff className="w-4 h-4 opacity-40" />
                         No Voucher
@@ -911,8 +976,7 @@ function InlineTransTypeCell({
 
     if (!forceEdit) {
         return (
-            <div className="flex flex-col gap-1 items-center">
-                <span className="text-[10px] font-black text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100 uppercase tracking-widest">{mode}</span>
+            <div className="flex flex-col items-center">
                 <span className="text-xs font-bold text-[#7a0f1f] truncate w-full text-center">{row.transType}</span>
             </div>
         );
@@ -929,7 +993,7 @@ function InlineTransTypeCell({
                     <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${openMode ? "rotate-180" : ""}`} />
                 </button>
                 {openMode && (
-                    <div className="absolute top-full mt-2 z-[120] bg-white rounded-xl border border-gray-100 shadow-2xl overflow-hidden py-1 min-w-[140px] ring-1 ring-black/10 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="absolute bottom-full mb-2 z-[120] bg-white rounded-xl border border-gray-100 shadow-2xl overflow-hidden py-1 min-w-[140px] ring-1 ring-black/10 animate-in fade-in slide-in-from-bottom-2 duration-200">
                         {(["DEPOSIT", "WITHDRAW"] as const).map((m) => (
                             <button key={m} onClick={() => handleModeChange(m)} className={`w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold transition-colors text-left ${m === mode ? "bg-gray-50 text-[#7a0f1f]" : "text-gray-600 hover:bg-gray-50"}`}>
                                 {m}
@@ -964,15 +1028,15 @@ function InlineTransTypeCell({
                                 return (
                                     <div key={sid} className={cn(
                                         "flex items-center justify-between px-3 py-2 border rounded-lg animate-in slide-in-from-top-1",
-                                        isRemoved ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-200"
+                                        isRemoved ? "bg-gray-50/50 border-gray-200" : "bg-gray-50 border-gray-200"
                                     )}>
                                         <div className="flex items-center gap-2 min-w-0">
-                                            <FileText className={cn("w-3.5 h-3.5 shrink-0", isRemoved ? "text-amber-400" : "text-gray-400")} />
+                                            <FileText className={cn("w-3.5 h-3.5 shrink-0", isRemoved ? "text-gray-300" : "text-gray-400")} />
                                             <span className={cn(
                                                 "text-[11px] font-bold truncate",
-                                                isRemoved ? "text-amber-700 font-black italic line-through" : "text-gray-700"
+                                                isRemoved ? "text-gray-400 line-through decoration-gray-300" : "text-gray-700"
                                             )}>
-                                                {fileName} {isRemoved ? "(REMOVING)" : ""}
+                                                {fileName}
                                             </span>
                                         </div>
                                         <button 
@@ -983,7 +1047,7 @@ function InlineTransTypeCell({
                                             }} 
                                             className={cn(
                                                 "p-1 transition-colors",
-                                                isRemoved ? "text-amber-400 hover:text-amber-600" : "text-gray-400 hover:text-red-500"
+                                                isRemoved ? "text-gray-400 hover:text-gray-600" : "text-gray-400 hover:text-red-500"
                                             )}
                                         >
                                             {isRemoved ? <RefreshCw className="w-3.5 h-3.5" /> : <Trash2 className="w-3.5 h-3.5" />}
@@ -1085,7 +1149,7 @@ function InlineTransTypeCell({
                             <ChevronDown className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform ${openType ? "rotate-180" : ""}`} />
                         </button>
                         {openType && (
-                            <div className="absolute top-full mt-2 z-[120] bg-white rounded-xl border border-gray-100 shadow-2xl overflow-hidden py-1 min-w-[170px] ring-1 ring-black/10 animate-in fade-in slide-in-from-top-2 duration-200">
+                            <div className="absolute bottom-full mb-2 z-[120] bg-white rounded-xl border border-gray-100 shadow-2xl overflow-hidden py-1 min-w-[170px] ring-1 ring-black/10 animate-in fade-in slide-in-from-bottom-2 duration-200">
                                 {options.map((opt) => (
                                     <button key={opt} onClick={() => handleTypeSelect(opt)} className={`w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold transition-colors text-left ${opt === selectedType ? "bg-gray-50 text-[#7a0f1f]" : "text-gray-600 hover:bg-gray-50"}`}>
                                         {opt}
@@ -1211,7 +1275,7 @@ function InlineParticularsCell({
                                         <ChevronDown className={`w-3 h-3 text-gray-400 shrink-0 transition-transform ${openUnit ? "rotate-180" : ""}`} />
                                     </button>
                                     {openUnit && (
-                                        <div className="absolute top-full mt-2 left-0 w-64 z-[110] bg-white border border-gray-100 shadow-2xl rounded-xl overflow-hidden py-1 ring-1 ring-black/10 animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <div className="absolute bottom-full mb-2 left-0 w-64 z-[110] bg-white border border-gray-100 shadow-2xl rounded-xl overflow-hidden py-1 ring-1 ring-black/10 animate-in fade-in slide-in-from-bottom-2 duration-200">
                                             <div className="px-3 py-2 border-b border-gray-50 flex items-center gap-2 bg-gray-50/50">
                                                 <Search className="w-3 h-3 text-gray-400" />
                                                 <input 
@@ -1401,7 +1465,7 @@ function InlineOwnerCell({
                 <ChevronDown className={`w-3.5 h-3.5 opacity-40 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
             </button>
             {open && (
-                <div className="absolute top-full mt-2 left-0 w-72 z-[110] bg-white border border-gray-100 shadow-2xl rounded-xl overflow-hidden py-1 ring-1 ring-black/10 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute bottom-full mb-2 left-0 w-72 z-[110] bg-white border border-gray-100 shadow-2xl rounded-xl overflow-hidden py-1 ring-1 ring-black/10 animate-in fade-in slide-in-from-bottom-2 duration-200">
                     <div className="px-4 py-3 border-b border-gray-50 flex items-center gap-3 bg-gray-50/50">
                         <Search className="w-3.5 h-3.5 text-gray-400" />
                         <input 

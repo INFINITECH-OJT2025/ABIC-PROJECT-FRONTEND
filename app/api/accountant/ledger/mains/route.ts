@@ -25,6 +25,7 @@ export async function GET(req: Request) {
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
       },
+      cache: "no-store",
     });
 
     const data = await backendRes.json().catch(() => ({}));

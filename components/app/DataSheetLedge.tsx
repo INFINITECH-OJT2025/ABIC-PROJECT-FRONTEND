@@ -580,14 +580,31 @@ export default function DataSheetLedge<T extends Record<string, any>>({
                             ))
                         ) : displayRows.length === 0 ? (
                             <>
-                                <tr>
+                                <tr 
+                                    onContextMenu={(e) => {
+                                        if (onRowContextMenu) {
+                                            e.preventDefault();
+                                            onRowContextMenu(e, null as any, 0);
+                                        }
+                                    }}
+                                >
                                     <td colSpan={visibleColumns.length} className="p-0">
                                         <EmptyState title={emptyTitle} description={emptyDescription} />
                                     </td>
                                 </tr>
                                 {/* Pad with empty rows to keep table height consistent */}
-                                {[...Array(Math.max(0, 10 - 3))].map((_, i) => (
-                                    <tr key={`empty-${i}`} className="border-b border-gray-100" style={{ background: i % 2 === 0 ? "rgba(253, 242, 248, 0.6)" : "#ffffff" }}>
+                                {[...Array(Math.max(0, 10 - 1))].map((_, i) => (
+                                    <tr 
+                                        key={`empty-${i}`} 
+                                        className="border-b border-gray-100" 
+                                        style={{ background: i % 2 === 1 ? "rgba(253, 242, 248, 0.6)" : "#ffffff" }}
+                                        onContextMenu={(e) => {
+                                            if (onRowContextMenu) {
+                                                e.preventDefault()
+                                                onRowContextMenu(e, null as any, i + 1)
+                                            }
+                                        }}
+                                    >
                                         {visibleColumns.map((col) => (
                                             <td key={col.key} className="px-4 py-2" style={{ width: col.width, minWidth: col.minWidth, maxWidth: col.maxWidth }}>
                                                 <span className="text-transparent select-none">&nbsp;</span>
@@ -650,7 +667,17 @@ export default function DataSheetLedge<T extends Record<string, any>>({
                                 const padIndex = displayRows.length + i;
                                 const isOdd = padIndex % 2 === 1;
                                 return (
-                                    <tr key={`pad-${i}`} className="border-b border-gray-100" style={{ background: isOdd ? "rgba(253, 242, 248, 0.6)" : "#ffffff" }}>
+                                    <tr 
+                                        key={`pad-${i}`} 
+                                        className="border-b border-gray-100" 
+                                        style={{ background: isOdd ? "rgba(253, 242, 248, 0.6)" : "#ffffff" }}
+                                        onContextMenu={(e) => {
+                                            if (onRowContextMenu) {
+                                                e.preventDefault()
+                                                onRowContextMenu(e, null as any, padIndex)
+                                            }
+                                        }}
+                                    >
                                         {visibleColumns.map((col) => (
                                             <td key={col.key} className="px-4 py-2" style={{ width: col.width, minWidth: col.minWidth, maxWidth: col.maxWidth }}>
                                                 <span className="text-transparent select-none">&nbsp;</span>

@@ -19,6 +19,7 @@ import {
     ImagePlus,
     AlertTriangle,
     RefreshCw,
+    Plus,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -197,11 +198,12 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
     const [showExtraColumns, setShowExtraColumns] = useState(false);
     const [lastEditedId, setLastEditedId] = useState<number | null>(null);
 
-    const [contextMenu, setContextMenu] = useState<{ x: number, y: number, visible: boolean, row: LedgerEntry | null }>({
+    const [contextMenu, setContextMenu] = useState<{ x: number, y: number, visible: boolean, row: LedgerEntry | null, index: number | null }>({
         x: 0,
         y: 0,
         visible: false,
         row: null,
+        index: null,
     });
 
     const [editingTxId, setEditingTxId] = useState<number | null>(null);
@@ -218,6 +220,7 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
     const [newTxFile, setNewTxFile] = useState<File | null>(null);
     const [newTxInstFiles, setNewTxInstFiles] = useState<File[]>([]);
     const [newTxSaving, setNewTxSaving] = useState(false);
+    const [addingIndex, setAddingIndex] = useState<number>(0);
 
     // All owners for inline owner dropdown (includes CLIENT, COMPANY, MAIN)
     const [allOwners, setAllOwners] = useState<AllOwner[]>([]);
@@ -323,7 +326,11 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             .then((res) => res.json())
             .then((data) => {
                 if (data.success) {
-                    setEntries(data.data.transactions || []);
+                    const mapped = (data.data.transactions || []).map((t: LedgerEntry) => ({
+                        ...t,
+                        transMethod: t.transMethod || (t.deposit > 0 ? "DEPOSIT" : "WITHDRAWAL")
+                    }));
+                    setEntries(mapped);
                     setOpeningBalance(data.data.openingBalance || 0);
                     setRunningBalance(data.data.runningBalance || 0);
                 } else {
@@ -542,6 +549,31 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
         }
     }, [showToast]);
 
+    // ── Patch extra fields ────────────────────────────────────────────────────
+
+    const handleSaveExtra = useCallback(async (transactionId: number, fundReference: string | null, personInCharge: string | null) => {
+        try {
+            const res = await fetch(`/api/accountant/transactions/${transactionId}/patch-extra`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    fund_reference: fundReference,
+                    person_in_charge: personInCharge
+                }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast("Fields Updated", "Reference information saved.", "success");
+                setLastEditedId(transactionId);
+                fetchLedger();
+            } else {
+                showToast("Error", data.message || "Failed to update additional fields.", "error");
+            }
+        } catch (err: any) {
+            showToast("Error", err.message || "An unexpected error occurred.", "error");
+        }
+    }, [showToast, fetchLedger]);
+
     const handleSaveAllChanges = useCallback(async () => {
         if (!editingTxId || !editingRowDraft) return;
         
@@ -595,7 +627,14 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
                 await handleSaveOwner(editingTxId, Number(editingRowDraft.otherOwnerId));
             }
 
-            // 6. Voucher (File upload or Removal)
+            // 6. Extra Fields (Fund Reference & Person In Charge)
+            const isFundRefChanged = editingRowDraft.fundReference !== original.fundReference;
+            const isPICChanged = editingRowDraft.personInCharge !== original.personInCharge;
+            if (isFundRefChanged || isPICChanged) {
+                await handleSaveExtra(editingTxId, editingRowDraft.fundReference, editingRowDraft.personInCharge);
+            }
+
+            // 7. Voucher (File upload or Removal)
             if (editingVoucherFile || editingRowDraft._removeVoucher) {
                 await handleSaveVoucher(editingTxId, editingVoucherFile, !!editingRowDraft._removeVoucher);
             }
@@ -612,12 +651,12 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
         } finally {
             setEditingSaving(false);
         }
-    }, [editingTxId, editingRowDraft, entries, handleSaveDate, handleSaveTransType, handleSaveAmount, handleSaveParticulars, handleSaveOwner, handleSaveVoucher, editingVoucherFile, editingChequeFiles, showToast, fetchLedger]);
+    }, [editingTxId, editingRowDraft, entries, handleSaveDate, handleSaveTransType, handleSaveAmount, handleSaveParticulars, handleSaveOwner, handleSaveVoucher, handleSaveExtra, editingVoucherFile, editingChequeFiles, showToast, fetchLedger]);
 
 
     // ── Handle Inline New Row Creation ────────────────────────────────────────
 
-    const startAddingNewRow = useCallback(() => {
+    const startAddingNewRow = useCallback((atIndex: number = 0) => {
         if (!selectedOwnerId) {
             showToast("Warning", "Please select an owner first.", "warning");
             return;
@@ -632,6 +671,7 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
         const ysd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         
         setIsAddingNew(true);
+        setAddingIndex(atIndex);
         setNewTxFile(null);
         setNewTxInstFiles([]);
         setNewTxSaving(false);
@@ -688,34 +728,42 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             const saveToLedger = newTxRow.saveToUnitLedger !== false && !!newTxRow.otherUnitId;
             const finalParticulars = newTxRow.particulars;
 
+            // Align voucher_no logic with TransactionForm.tsx (optional: derive from file if empty)
+            let finalVoucherNo = newTxRow.voucherNo || null;
+            if (!finalVoucherNo && newTxFile) {
+                finalVoucherNo = newTxFile.name.replace(/\.[^.]+$/, "").toUpperCase();
+            }
+
             const transactionPayload = {
                 voucher_date: newTxRow.voucherDate,
-                voucher_no: newTxRow.voucherNo || null,
+                voucher_no: finalVoucherNo,
                 trans_type: newTxRow.transType,
-                trans_method: newTxRow.transMethod,
                 amount: amt,
                 particulars: finalParticulars,
                 status: "ACTIVE",
 
                 // Routing IDs
-                from_owner_id: isDeposit ? newTxRow.otherOwnerId : selectedOwnerId,
-                to_owner_id: isDeposit ? selectedOwnerId : newTxRow.otherOwnerId,
+                // 🔥 CRITICAL: Backend and TransactionForm.tsx expect from=MAIN, to=CLIENT
+                // The unit belongs to the CLIENT (to_owner_id), so we must map it this way
+                // for the backend validation to pass.
+                from_owner_id: selectedOwnerId,
+                to_owner_id: newTxRow.otherOwnerId,
                 
                 // Unit specifics
                 unit_id: newTxRow.otherUnitId,
                 save_to_unit_ledger: saveToLedger,
+
+                // Extra Fields
+                fund_reference: newTxRow.fundReference || null,
+                person_in_charge: newTxRow.personInCharge || null,
             };
 
             const instrumentsPayload: any[] = [];
-            if (newTxInstFiles.length > 0 && newTxRow.transType === "CHEQUE") {
+            if (newTxInstFiles.length > 0 && (newTxRow.transType === "CHEQUE" || newTxRow.transType === "CHEQUE DEPOSIT")) {
                 newTxInstFiles.forEach(f => {
                     instrumentsPayload.push({
-                        instrument_type: "CHEQUE",
+                        instrument_type: newTxRow.transType,
                         instrument_no: f.name.replace(/\.[^.]+$/, ""),
-                        amount: amt,
-                        bank_name: null,
-                        date_of_instrument: null,
-                        notes: null
                     });
                 });
             }
@@ -728,14 +776,15 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             if (newTxFile) {
                 formData.append('voucher', newTxFile);
             }
+            // 🔥 BACKEND EXPECTS file_0, file_1, etc. for instrument attachments
             if (newTxInstFiles.length > 0) {
-                newTxInstFiles.forEach(f => {
-                    formData.append('attachments_files[]', f);
+                newTxInstFiles.forEach((f, idx) => {
+                    formData.append(`file_${idx}`, f);
                 });
             }
 
             // 3. Send Request
-            const endpoint = isDeposit ? '/api/head/accountant/transactions/deposit' : '/api/head/accountant/transactions/withdrawal';
+            const endpoint = isDeposit ? '/api/accountant/transactions/deposit' : '/api/accountant/transactions/withdrawal';
             const res = await fetch(endpoint, {
                 method: "POST",
                 body: formData, // fetch automatically sets multipart matching boundary
@@ -745,6 +794,7 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             if (data.success) {
                 showToast("Success", data.message || "Transaction added successfully.", "success");
                 setIsAddingNew(false);
+                setAddingIndex(0);
                 setNewTxRow(null);
                 setNewTxFile(null);
                 setNewTxInstFiles([]);
@@ -776,6 +826,7 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             width: "52px",
             minWidth: "52px",
             renderCell: (row, rowIndex) => {
+                if ((row as any).isPlaceholder) return null;
                 if (row.id === -1) {
                     return (
                         <div className="flex items-center justify-center w-full h-full">
@@ -787,7 +838,7 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
                 }
                 return (
                     <span className="text-xs font-bold text-gray-400 tabular-nums">
-                        {rowIndex + (isAddingNew ? 0 : 1)}
+                        {rowIndex + 1}
                     </span>
                 );
             },
@@ -869,6 +920,7 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             maxWidth: (isAddingNew || editingTxId) ? "250px" : "170px",
             sortable: true,
             renderCell: (row) => {
+                if ((row as any).isPlaceholder) return null;
                 const files: { name: string; url?: string | null; type?: string | null; size?: number | null }[] =
                     (row.instrumentAttachments ?? []).map((a: any) => ({
                         name: a.instrumentNo ?? a.file_name ?? a.name ?? "—",
@@ -1073,10 +1125,14 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             maxWidth: "140px",
             sortable: true,
             renderCell: (row) => {
+                if ((row as any).isPlaceholder) return null;
                 if (row.id === -1) return <span className="text-gray-300 font-bold italic">TBC</span>;
                 return (
                     <span className="font-bold text-gray-900">
-                        ₱{row.outsBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                        {typeof row.outsBalance === 'number' 
+                            ? `₱${row.outsBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
+                            : "—"
+                        }
                     </span>
                 );
             },
@@ -1091,11 +1147,22 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
                 </InfoTooltip>
             ),
             align: "left",
-            minWidth: "180px",
-            maxWidth: "180px",
-            hidden: !showExtraColumns,
+            minWidth: "350px",
+            maxWidth: "350px",
+            hidden: !showExtraColumns && !editingTxId && !isAddingNew,
             sortable: true,
-            renderCell: (row) => row.id === -1 ? "-" : row.fundReference || "-",
+            renderCell: (row) => (
+                <InlineUpsertTransaction
+                    type="fundReference"
+                    row={row}
+                    isNew={row.id === -1}
+                    newTxRow={newTxRow}
+                    setNewTxRow={setNewTxRow}
+                    editingTxId={editingTxId}
+                    draft={editingRowDraft}
+                    setDraft={setEditingRowDraft}
+                />
+            ),
         },
 
         // ── PERSON IN CHARGE (extra) ──
@@ -1107,11 +1174,22 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
                 </InfoTooltip>
             ),
             align: "center",
-            minWidth: "160px",
-            maxWidth: "160px",
-            hidden: !showExtraColumns,
+            minWidth: "220px",
+            maxWidth: "220px",
+            hidden: !showExtraColumns && !editingTxId && !isAddingNew,
             sortable: true,
-            renderCell: (row) => row.id === -1 ? "-" : row.personInCharge || "-",
+            renderCell: (row) => (
+                <InlineUpsertTransaction
+                    type="personInCharge"
+                    row={row}
+                    isNew={row.id === -1}
+                    newTxRow={newTxRow}
+                    setNewTxRow={setNewTxRow}
+                    editingTxId={editingTxId}
+                    draft={editingRowDraft}
+                    setDraft={setEditingRowDraft}
+                />
+            ),
         },
 
         // ── EDIT ACTIONS (shown only for editing row) ──
@@ -1123,6 +1201,7 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             minWidth: "120px",
             maxWidth: "120px",
             renderCell: (row) => {
+                if ((row as any).isPlaceholder) return null;
                 if (row.id === -1) {
                     return (
                         <div className="flex flex-col gap-2 w-full mt-1">
@@ -1210,10 +1289,23 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
             );
         }
         if (isAddingNew && newTxRow) {
-            current.unshift(newTxRow);
+            // If target index is beyond current length, pad with placeholders
+            if (addingIndex >= current.length) {
+                const gapCount = addingIndex - current.length;
+                for (let i = 0; i < gapCount; i++) {
+                    current.push({ 
+                        id: `gap-${i}`, 
+                        transactionId: -99 - i, 
+                        isPlaceholder: true 
+                    } as any);
+                }
+                current.push(newTxRow);
+            } else {
+                current.splice(addingIndex, 0, newTxRow);
+            }
         }
         return current;
-    }, [entriesWithBalance, query, isAddingNew, newTxRow]);
+    }, [entriesWithBalance, query, isAddingNew, newTxRow, addingIndex]);
 
     // ── Render ────────────────────────────────────────────────────────────────
 
@@ -1247,7 +1339,7 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
                         <div className="flex items-center gap-2">
                             {role !== "superadmin" && (
                                 <button
-                                    onClick={startAddingNewRow}
+                                    onClick={() => startAddingNewRow(0)}
                                     disabled={isAddingNew || entriesLoading || ownersLoading}
                                     className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold text-white bg-[#7a0f1f] hover:bg-[#5f0c18] rounded-lg transition-colors disabled:opacity-50"
                                 >
@@ -1274,12 +1366,22 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
                             onRefresh={fetchLedger}
                             containerMaxWidth="max-w-4xl"
                         >
-                            <OwnerSelectDropdown
-                                owners={owners}
-                                selectedId={selectedOwnerId}
-                                onChange={setSelectedOwnerId}
-                                loading={ownersLoading}
-                            />
+                            <div className="flex items-center gap-3">
+                                <OwnerSelectDropdown
+                                    owners={owners}
+                                    selectedId={selectedOwnerId}
+                                    onChange={setSelectedOwnerId}
+                                    loading={ownersLoading}
+                                />
+                                <button
+                                    onClick={() => startAddingNewRow(0)}
+                                    disabled={isAddingNew || !selectedOwnerId}
+                                    className="inline-flex items-center gap-2 px-4 h-10 text-sm font-bold text-white bg-[#7a0f1f] hover:bg-[#5f0c18] rounded-lg transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:grayscale"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    <span>Add Transaction</span>
+                                </button>
+                            </div>
                         </SharedToolbar>
                     </div>
 
@@ -1323,12 +1425,16 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
                             loading={entriesLoading}
                             getRowId={(row) => `row-${row.transactionId}`}
                             highlightRowId={lastEditedId ? `row-${lastEditedId}` : (highlightTx ? `row-${highlightTx}` : undefined)}
-                            onRowContextMenu={(e, row) => {
+                            sortKey={isAddingNew ? null : undefined}
+                            sortDirection={isAddingNew ? null : undefined}
+                            onRowContextMenu={(e, row, index) => {
+                                if (!e || !e.clientX || !e.clientY) return;
                                 setContextMenu({
                                     x: e.clientX,
                                     y: e.clientY,
                                     visible: true,
-                                    row
+                                    row,
+                                    index
                                 });
                             }}
                         />
@@ -1340,33 +1446,46 @@ function TransactionSheetPage({ role }: { role: "superadmin" | "accountant" }) {
                 {...contextMenu}
                 onClose={() => setContextMenu(prev => ({ ...prev, visible: false }))}
                 actions={[
-                    {
-                        label: editingTxId === contextMenu.row?.transactionId ? "Cancel Edit" : "Edit Transaction",
-                        icon: editingTxId === contextMenu.row?.transactionId ? PencilOff : Pencil,
-                        onClick: () => {
-                            if (contextMenu.row) {
-                                if (editingTxId === contextMenu.row.transactionId) {
-                                    setEditingTxId(null);
-                                    setEditingRowDraft(null);
-                                    setEditingChequeFiles([]);
-                                    setEditingTransMethod(null);
-                                } else {
-                                    setEditingTxId(contextMenu.row.transactionId);
-                                    setEditingRowDraft({ ...contextMenu.row });
-                                    setEditingChequeFiles([]);
-                                    setEditingTransMethod(contextMenu.row.deposit > 0 ? "DEPOSIT" : "WITHDRAWAL");
-                                }
-                                setEditingField(null);
+                    // Global Add: only show if right-clicked on empty space (no row)
+                    ...(!contextMenu.row ? [
+                        {
+                            label: "Add New Transaction",
+                            icon: Plus,
+                            onClick: () => {
+                                startAddingNewRow(contextMenu.index ?? 0);
                             }
                         }
-                    },
-                    {
-                        label: "View Transaction",
-                        icon: Eye,
-                        onClick: () => {
-                            // Future action
+                    ] : []),
+                    // Actions for existing rows
+                    ...(contextMenu.row ? [
+                        {
+                            label: editingTxId === contextMenu.row.transactionId ? "Cancel Edit" : "Edit Transaction",
+                            icon: editingTxId === contextMenu.row.transactionId ? PencilOff : Pencil,
+                            onClick: () => {
+                                if (contextMenu.row) {
+                                    if (editingTxId === contextMenu.row.transactionId) {
+                                        setEditingTxId(null);
+                                        setEditingRowDraft(null);
+                                        setEditingChequeFiles([]);
+                                        setEditingTransMethod(null);
+                                    } else {
+                                        setEditingTxId(contextMenu.row.transactionId);
+                                        setEditingRowDraft({ ...contextMenu.row });
+                                        setEditingChequeFiles([]);
+                                        setEditingTransMethod(contextMenu.row.deposit > 0 ? "DEPOSIT" : "WITHDRAWAL");
+                                    }
+                                    setEditingField(null);
+                                }
+                            }
+                        },
+                        {
+                            label: "View Transaction",
+                            icon: Eye,
+                            onClick: () => {
+                                // Future action
+                            }
                         }
-                    }
+                    ] : []),
                 ]}
             />
 
